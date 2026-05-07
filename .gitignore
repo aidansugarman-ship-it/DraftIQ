@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+functions/lib/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build artifacts
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+android/
+ios/
+
+# Environment variables — NEVER commit real keys
+.env
+.env.local
+.env.development
+.env.production
+
+# Firebase native config — contains project credentials
+google-services.json
+GoogleService-Info.plist
+
+# Firebase Functions secrets
+functions/.env
+functions/.secret.local
+.firebaserc
+
+# OS
+.DS_Store
+*.log
+npm-debug.*
+
+# Editor
+.vscode/
+.idea/
+
+# TypeScript build output
+*.tsbuildinfo
