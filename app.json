@@ -48,6 +48,7 @@
       "expo-router",
       "expo-font",
       "expo-apple-authentication",
+      "./plugins/withFmtFix",
       [
         "expo-notifications",
         {
