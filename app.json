@@ -17,10 +17,8 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.draftiq.app",
-      "usesAppleSignIn": true,
       "buildNumber": "1",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification", "fetch"],
         "NSCameraUsageDescription": "DraftIQ uses your camera to update your profile photo.",
         "NSPhotoLibraryUsageDescription": "DraftIQ saves your draft recap share cards to your photo library."
       }
@@ -47,17 +45,7 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-apple-authentication",
       "./plugins/withFmtFix",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/icon.png",
-          "color": "#00FF87",
-          "defaultChannel": "default",
-          "sounds": []
-        }
-      ],
       [
         "expo-build-properties",
         {
