@@ -2,21 +2,33 @@ const { withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
-// RN 0.77 ships with a fmt version that fails to compile under Xcode 16 Clang
-// because FMT_STRING uses consteval which triggers a compiler bug.
-// Setting FMT_CONSTEVAL= disables consteval for the fmt pod only.
 module.exports = function withFmtFix(config) {
   return withDangerousMod(config, [
     'ios',
     (config) => {
+      const root = config.modRequest.projectRoot;
+
+      // Patch 1: expo-modules-core StyleSizeLength -> StyleLength (RN 0.77 Yoga API change)
+      const emoCorePath = path.join(
+        root,
+        'node_modules/expo-modules-core/common/cpp/fabric/ExpoViewComponentDescriptor.cpp'
+      );
+      if (fs.existsSync(emoCorePath)) {
+        const before = fs.readFileSync(emoCorePath, 'utf8');
+        const after = before.replace(/StyleSizeLength::points/g, 'StyleLength::points');
+        if (before !== after) {
+          fs.writeFileSync(emoCorePath, after);
+          console.log('[withFmtFix] patched ExpoViewComponentDescriptor.cpp');
+        }
+      }
+
+      // Patch 2: fmt consteval via Podfile post_install (Xcode 16 Clang bug)
       const podfilePath = path.join(config.modRequest.platformProjectRoot, 'Podfile');
       let podfile = fs.readFileSync(podfilePath, 'utf8');
 
-      if (podfile.includes('FMT_CONSTEVAL')) return config;
-
-      const fmtFix = `
+      if (!podfile.includes('FMT_CONSTEVAL')) {
+        const fmtFix = `
   # Fix: fmt consteval compile error under Xcode 16 / RN 0.77
-  # Patch the fmt header to disable consteval which breaks Clang 16
   Dir.glob(File.join(installer.sandbox.root, '**', 'core.h')).each do |file|
     next unless file.include?('/fmt/')
     content = File.read(file)
@@ -34,13 +46,13 @@ module.exports = function withFmtFix(config) {
     end
   end
 `;
+        podfile = podfile.replace(
+          /post_install do \|installer\|/,
+          `post_install do |installer|\n${fmtFix}`
+        );
+        fs.writeFileSync(podfilePath, podfile);
+      }
 
-      podfile = podfile.replace(
-        /post_install do \|installer\|/,
-        `post_install do |installer|\n${fmtFix}`
-      );
-
-      fs.writeFileSync(podfilePath, podfile);
       return config;
     },
   ]);
