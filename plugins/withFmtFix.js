@@ -14,19 +14,23 @@ module.exports = function withFmtFix(config) {
 
       if (podfile.includes('FMT_CONSTEVAL')) return config;
 
-      const patch = `
-# Fix: fmt consteval compile error under Xcode 16 / RN 0.77
-post_install do |installer|
+      const fmtFix = `
+  # Fix: fmt consteval compile error under Xcode 16 / RN 0.77
   installer.pods_project.targets.each do |target|
     next unless target.name == 'fmt'
     target.build_configurations.each do |cfg|
       cfg.build_settings['OTHER_CFLAGS'] = '$(inherited) -DFMT_CONSTEVAL='
     end
   end
-end
 `;
 
-      fs.writeFileSync(podfilePath, podfile + patch);
+      // Inject into the existing post_install block instead of adding a new one
+      podfile = podfile.replace(
+        /post_install do \|installer\|/,
+        `post_install do |installer|\n${fmtFix}`
+      );
+
+      fs.writeFileSync(podfilePath, podfile);
       return config;
     },
   ]);
