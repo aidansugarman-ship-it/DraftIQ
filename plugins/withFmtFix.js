@@ -16,15 +16,25 @@ module.exports = function withFmtFix(config) {
 
       const fmtFix = `
   # Fix: fmt consteval compile error under Xcode 16 / RN 0.77
-  installer.pods_project.targets.each do |target|
-    next unless target.name == 'fmt'
-    target.build_configurations.each do |cfg|
-      cfg.build_settings['OTHER_CFLAGS'] = '$(inherited) -DFMT_CONSTEVAL='
+  # Patch the fmt header to disable consteval which breaks Clang 16
+  Dir.glob(File.join(installer.sandbox.root, '**', 'core.h')).each do |file|
+    next unless file.include?('/fmt/')
+    content = File.read(file)
+    if content.include?('FMT_CONSTEVAL consteval')
+      content.gsub!('define FMT_CONSTEVAL consteval', 'define FMT_CONSTEVAL ')
+      File.write(file, content)
+    end
+  end
+  Dir.glob(File.join(installer.sandbox.root, '**', 'base.h')).each do |file|
+    next unless file.include?('/fmt/')
+    content = File.read(file)
+    if content.include?('FMT_CONSTEVAL consteval')
+      content.gsub!('define FMT_CONSTEVAL consteval', 'define FMT_CONSTEVAL ')
+      File.write(file, content)
     end
   end
 `;
 
-      // Inject into the existing post_install block instead of adding a new one
       podfile = podfile.replace(
         /post_install do \|installer\|/,
         `post_install do |installer|\n${fmtFix}`
