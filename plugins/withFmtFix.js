@@ -20,8 +20,7 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     next unless target.name == 'fmt'
     target.build_configurations.each do |cfg|
-      cfg.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
-      cfg.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FMT_CONSTEVAL='
+      cfg.build_settings['OTHER_CFLAGS'] = '$(inherited) -DFMT_CONSTEVAL='
     end
   end
 end
