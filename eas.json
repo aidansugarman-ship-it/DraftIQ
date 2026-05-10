@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 10.0.0"
+    "version": ">= 10.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -8,6 +9,9 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "npm_config_legacy_peer_deps": "true"
       }
     },
     "preview": {
@@ -17,11 +21,17 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "npm_config_legacy_peer_deps": "true"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "npm_config_legacy_peer_deps": "true"
       }
     }
   },
