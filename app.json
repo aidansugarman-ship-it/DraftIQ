@@ -70,7 +70,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "48686907-7ba8-4eb9-acc5-d15912ae63bc"
+      }
     }
   }
 }
