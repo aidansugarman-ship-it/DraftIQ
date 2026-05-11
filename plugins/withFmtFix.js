@@ -1,8 +1,18 @@
-const { withDangerousMod } = require('@expo/config-plugins');
+const { withDangerousMod, withEntitlementsPlist } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
-module.exports = function withFmtFix(config) {
+// Strip entitlements that require a paid Apple Developer account
+function withStrippedEntitlements(config) {
+  return withEntitlementsPlist(config, (config) => {
+    delete config.modResults['com.apple.developer.applesignin'];
+    delete config.modResults['aps-environment'];
+    delete config.modResults['com.apple.security.application-groups'];
+    return config;
+  });
+}
+
+function withXcode26Fixes(config) {
   return withDangerousMod(config, [
     'ios',
     (config) => {
@@ -18,17 +28,34 @@ module.exports = function withFmtFix(config) {
         const after = before.replace(/StyleSizeLength::points/g, 'StyleLength::points');
         if (before !== after) {
           fs.writeFileSync(emoCorePath, after);
-          console.log('[withFmtFix] patched ExpoViewComponentDescriptor.cpp');
+          console.log('[patch] fixed StyleSizeLength in ExpoViewComponentDescriptor.cpp');
         }
       }
 
-      // Patch 2: fmt consteval via Podfile post_install (Xcode 16 Clang bug)
+      // Patch 2: expo-modules-core createFromUtf16 -> createFromUtf8 (JSI API change)
+      const jsiPath = path.join(
+        root,
+        'node_modules/expo-modules-core/ios/JSI/EXJSIConversions.mm'
+      );
+      if (fs.existsSync(jsiPath)) {
+        const before = fs.readFileSync(jsiPath, 'utf8');
+        const after = before.replace(
+          /return jsi::String::createFromUtf16\(runtime,\s*\(const char16_t \*\)\[value cStringUsingEncoding:NSUTF16StringEncoding\],\s*length\);/g,
+          'return jsi::String::createFromUtf8(runtime, [value UTF8String]);'
+        );
+        if (before !== after) {
+          fs.writeFileSync(jsiPath, after);
+          console.log('[patch] fixed createFromUtf16 in EXJSIConversions.mm');
+        }
+      }
+
+      // Patch 3: fmt consteval via Podfile post_install (Xcode 26 Clang bug)
       const podfilePath = path.join(config.modRequest.platformProjectRoot, 'Podfile');
       let podfile = fs.readFileSync(podfilePath, 'utf8');
 
       if (!podfile.includes('FMT_CONSTEVAL')) {
         const fmtFix = `
-  # Fix: fmt consteval compile error under Xcode 16 / RN 0.77
+  # Fix: fmt consteval compile error under Xcode 26 / RN 0.77
   Dir.glob(File.join(installer.sandbox.root, '**', 'core.h')).each do |file|
     next unless file.include?('/fmt/')
     content = File.read(file)
@@ -56,4 +83,10 @@ module.exports = function withFmtFix(config) {
       return config;
     },
   ]);
+}
+
+module.exports = function withAllFixes(config) {
+  config = withStrippedEntitlements(config);
+  config = withXcode26Fixes(config);
+  return config;
 };
