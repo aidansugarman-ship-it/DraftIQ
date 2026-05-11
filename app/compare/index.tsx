@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -359,6 +361,18 @@ export default function CompareScreen() {
   }
 
   const bothSelected = playerA !== null && playerB !== null;
+  const [aiVerdict, setAiVerdict] = useState('');
+  const [verdictLoading, setVerdictLoading] = useState(false);
+
+  useEffect(() => {
+    if (!playerA || !playerB) return;
+    setAiVerdict('');
+    setVerdictLoading(true);
+    gemini.comparePlayers(playerA.name, playerB.name, 'NFL')
+      .then(setAiVerdict)
+      .catch(() => {})
+      .finally(() => setVerdictLoading(false));
+  }, [playerA?.id, playerB?.id]);
 
   function getWinner(metric: keyof ComparePlayer): 'A' | 'B' | 'tie' {
     if (!playerA || !playerB) return 'tie';
@@ -503,28 +517,23 @@ export default function CompareScreen() {
                 ))}
               </View>
 
-              {/* AI Verdicts */}
+              {/* AI Verdict */}
               <View style={styles.verdictSection}>
                 <Text variant="label" color={colors.textTertiary} style={styles.metricsTitle}>
                   AI VERDICT
                 </Text>
-                <View style={[styles.verdictCard, { borderColor: `${colors.blue}30` }]}>
+                <View style={[styles.verdictCard, { borderColor: `${colors.accent}30` }]}>
                   <View style={styles.verdictName}>
-                    <PosBadge pos={playerA!.pos} />
-                    <Text variant="bodySmallMedium" color={colors.blue}>{playerA!.name}</Text>
+                    <Text variant="bodySmallMedium" color={colors.accent}>
+                      {playerA!.name} vs {playerB!.name}
+                    </Text>
                   </View>
-                  <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 20, marginTop: spacing.sm }}>
-                    {playerA!.aiVerdict}
-                  </Text>
-                </View>
-                <View style={[styles.verdictCard, { borderColor: `${colors.gold}30`, marginTop: spacing.md }]}>
-                  <View style={styles.verdictName}>
-                    <PosBadge pos={playerB!.pos} />
-                    <Text variant="bodySmallMedium" color={colors.gold}>{playerB!.name}</Text>
-                  </View>
-                  <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 20, marginTop: spacing.sm }}>
-                    {playerB!.aiVerdict}
-                  </Text>
+                  {verdictLoading
+                    ? <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: spacing.sm }} />
+                    : <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 20, marginTop: spacing.sm }}>
+                        {aiVerdict || `${playerA!.aiVerdict} | ${playerB!.aiVerdict}`}
+                      </Text>
+                  }
                 </View>
               </View>
 

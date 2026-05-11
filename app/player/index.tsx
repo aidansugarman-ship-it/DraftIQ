@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +24,8 @@ import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useUserStore } from '@store/useUserStore';
 import { canAccess } from '@constants/tiers';
+import { gemini } from '@services/gemini';
+import { useGeminiTake } from '@hooks/useGeminiTake';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -238,8 +241,19 @@ export default function PlayerScreen() {
   const tier    = useUserStore((s) => s.tier);
   const [activeTab, setActiveTab] = useState<Tab>('analysis');
 
-  // Use mock data — in production query by id
   const player = MOCK_PLAYER;
+
+  const { take: whyDraft, loading: loadingDraft } = useGeminiTake(
+    () => gemini.playerAnalysis(player.name, player.position, player.team, 'NFL'),
+    [player.name]
+  );
+  const { take: whyAvoid, loading: loadingAvoid } = useGeminiTake(
+    () => gemini.playerAnalysis(
+      `Risks and concerns for ${player.name} (${player.position}, ${player.team}) — injury history, schedule, situation`,
+      player.position, player.team, 'NFL'
+    ),
+    [player.name]
+  );
 
   const op = useSharedValue(0);
   useEffect(() => {
@@ -346,13 +360,15 @@ export default function PlayerScreen() {
                   <>
                     <AIBlock
                       title="WHY DRAFT"
-                      body={player.aiAnalysis.whyDraft}
+                      body={loadingDraft ? '' : whyDraft}
+                      loading={loadingDraft}
                       accent={colors.green}
                       emoji="✅"
                     />
                     <AIBlock
                       title="WHY AVOID"
-                      body={player.aiAnalysis.whyAvoid}
+                      body={loadingAvoid ? '' : whyAvoid}
+                      loading={loadingAvoid}
                       accent={colors.coral}
                       emoji="⚠️"
                     />
@@ -457,8 +473,8 @@ export default function PlayerScreen() {
 
 // ─── AI Block ─────────────────────────────────────────────────────────────────
 
-function AIBlock({ title, body, accent, emoji }: {
-  title: string; body: string; accent: string; emoji: string;
+function AIBlock({ title, body, accent, emoji, loading }: {
+  title: string; body: string; accent: string; emoji: string; loading?: boolean;
 }) {
   return (
     <View style={[aiStyles.card, { borderColor: `${accent}30` }]}>
@@ -470,7 +486,10 @@ function AIBlock({ title, body, accent, emoji }: {
         <Text style={aiStyles.emoji}>{emoji}</Text>
         <Text variant="labelSmall" style={{ color: accent, letterSpacing: 0.8 }}>{title}</Text>
       </View>
-      <Text variant="body" color={colors.textSecondary} style={aiStyles.body}>{body}</Text>
+      {loading
+        ? <ActivityIndicator size="small" color={accent} style={{ marginVertical: 8 }} />
+        : <Text variant="body" color={colors.textSecondary} style={aiStyles.body}>{body}</Text>
+      }
     </View>
   );
 }

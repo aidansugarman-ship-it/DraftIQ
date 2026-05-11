@@ -5,7 +5,9 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -221,6 +223,16 @@ function PosBadge({ pos }: { pos: Pos }) {
 
 function InjuryCard({ report, index }: { report: InjuryReport; index: number }) {
   const impactColor = IMPACT_COLORS[report.impact];
+  const [aiTake, setAiTake] = useState(report.aiTake);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    setAiLoading(true);
+    gemini.injuryImpact(report.name, `${report.status} — ${report.injury} (${report.timeline})`, 'NFL')
+      .then(setAiTake)
+      .catch(() => {})
+      .finally(() => setAiLoading(false));
+  }, [report.name]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(10);
@@ -272,9 +284,10 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
         {/* AI Take */}
         <View style={icard.aiTake}>
           <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
-          <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>
-            {report.aiTake}
-          </Text>
+          {aiLoading
+            ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: 6 }} />
+            : <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>{aiTake}</Text>
+          }
         </View>
 
         {/* Handcuff */}

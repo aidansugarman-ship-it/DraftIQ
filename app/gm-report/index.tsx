@@ -4,7 +4,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
+import { gemini } from '@services/gemini';
+import { useGeminiTake } from '@hooks/useGeminiTake';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -162,6 +165,11 @@ export default function GMReportScreen() {
 
   const r = MOCK_REPORT;
   const gc = gradeColor(r.overallGrade);
+  const roster = r.positionGrades.map(g => g.pos);
+  const { take: aiSummary, loading: summaryLoading } = useGeminiTake(
+    () => gemini.gmWeeklyReport(roster, 'NFL'),
+    []
+  );
 
   return (
     <View style={styles.container}>
@@ -200,9 +208,10 @@ export default function GMReportScreen() {
           {/* ── Summary ───────────────────────────────────────────────────── */}
           <SectionLabel label="AI SUMMARY" />
           <View style={styles.summaryCard}>
-            <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 22 }}>
-              {r.summary}
-            </Text>
+            {summaryLoading
+              ? <ActivityIndicator size="small" color={colors.accent} />
+              : <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 22 }}>{aiSummary || r.summary}</Text>
+            }
           </View>
 
           {/* ── Position grades ───────────────────────────────────────────── */}

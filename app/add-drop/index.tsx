@@ -5,7 +5,9 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -223,6 +225,17 @@ function TrendArrow({ trend }: { trend: number }) {
 
 function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) {
   const accentColor = ACTION_COLORS[target.action];
+  const [aiTake, setAiTake] = useState(target.aiTake);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    if (target.action !== 'add') return;
+    setAiLoading(true);
+    gemini.addDropAdvice(target.name, target.dropsFor ?? 'a bench player', 'NFL')
+      .then(setAiTake)
+      .catch(() => {})
+      .finally(() => setAiLoading(false));
+  }, [target.name]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(12);
@@ -290,9 +303,10 @@ function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) 
         {/* AI Take */}
         <View style={card.aiTake}>
           <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
-          <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>
-            {target.aiTake}
-          </Text>
+          {aiLoading
+            ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: 6 }} />
+            : <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>{aiTake}</Text>
+          }
         </View>
 
         {/* Drop suggestion */}

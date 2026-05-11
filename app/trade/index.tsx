@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { gemini } from '@services/gemini';
 import {
   View,
   StyleSheet,
@@ -425,15 +426,23 @@ export default function TradeAnalyzerScreen() {
     setVerdict(null);
   }
 
-  function analyze() {
+  async function analyze() {
     if (giving.length === 0 || receiving.length === 0) return;
     setAnalyzing(true);
-    // Simulate a brief AI "thinking" delay
-    setTimeout(() => {
+    try {
+      const localVerdict = analyzeTradeLocally(giving, receiving);
+      const aiReasoning = await gemini.tradeAdvice(
+        giving.map(p => `${p.name} (${p.position})`),
+        receiving.map(p => `${p.name} (${p.position})`),
+        'NFL'
+      );
+      setVerdict({ ...localVerdict, reasoning: aiReasoning });
+    } catch {
       const v = analyzeTradeLocally(giving, receiving);
       setVerdict(v);
+    } finally {
       setAnalyzing(false);
-    }, 1200);
+    }
   }
 
   const canAnalyze = giving.length > 0 && receiving.length > 0 && !analyzing;
