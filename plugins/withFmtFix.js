@@ -49,12 +49,27 @@ function withXcode26Fixes(config) {
         }
       }
 
-      // Patch 3: fmt consteval via Podfile post_install (Xcode 26 Clang bug)
+      // Patch 3: Podfile fixes
       const podfilePath = path.join(config.modRequest.platformProjectRoot, 'Podfile');
       let podfile = fs.readFileSync(podfilePath, 'utf8');
 
+      // Force old arch — newArchEnabled: false in app.json doesn't always propagate
+      if (!podfile.includes('RCT_NEW_ARCH_ENABLED = 0')) {
+        podfile = podfile.replace(
+          /^(require .*)$/m,
+          `$1\nENV['RCT_NEW_ARCH_ENABLED'] = '0'`
+        );
+      }
+
       if (!podfile.includes('FMT_CONSTEVAL')) {
-        const fmtFix = `
+        const postInstallFixes = `
+  # Fix: allow non-modular includes so RCTReactNativeFactoryDelegate headers are found
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+    end
+  end
+
   # Fix: fmt consteval compile error under Xcode 26 / RN 0.77
   Dir.glob(File.join(installer.sandbox.root, '**', 'core.h')).each do |file|
     next unless file.include?('/fmt/')
@@ -75,7 +90,7 @@ function withXcode26Fixes(config) {
 `;
         podfile = podfile.replace(
           /post_install do \|installer\|/,
-          `post_install do |installer|\n${fmtFix}`
+          `post_install do |installer|\n${postInstallFixes}`
         );
         fs.writeFileSync(podfilePath, podfile);
       }
