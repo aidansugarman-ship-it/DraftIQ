@@ -25,9 +25,9 @@ ios/
 .env.development
 .env.production
 
-# Firebase native config — contains project credentials
-google-services.json
-GoogleService-Info.plist
+# Firebase native config — committed directly for EAS builds
+# google-services.json
+# GoogleService-Info.plist
 
 # Firebase Functions secrets
 functions/.env
