@@ -66,6 +66,12 @@ function scoreColor(n: number) {
 
 // ─── Player Row ───────────────────────────────────────────────────────────────
 
+const RANK_MEDAL: Record<number, { color: string; symbol: string }> = {
+  1: { color: '#FFD700', symbol: '🥇' },
+  2: { color: '#C0C0C0', symbol: '🥈' },
+  3: { color: '#CD7F32', symbol: '🥉' },
+};
+
 function PlayerRow({
   item,
   index,
@@ -75,14 +81,17 @@ function PlayerRow({
 }) {
   const trendColor = item.trend === 'up' ? colors.green : item.trend === 'down' ? colors.coral : colors.textTertiary;
   const trendIcon  = item.trend === 'up' ? '↑' : item.trend === 'down' ? '↓' : '—';
+  const medal      = RANK_MEDAL[item.rank];
 
   return (
     <TouchableOpacity
-      style={rowStyles.row}
+      style={[rowStyles.row, medal && { backgroundColor: `${medal.color}06` }]}
       onPress={() => router.push(`/player?id=${item.id}`)}
       activeOpacity={0.75}
     >
-      <Text style={rowStyles.rank} numberOfLines={1}>{item.rank}</Text>
+      <Text style={[rowStyles.rank, medal && { color: medal.color }]} numberOfLines={1}>
+        {medal ? medal.symbol : item.rank}
+      </Text>
 
       <View style={rowStyles.playerInfo}>
         <View style={rowStyles.nameRow}>

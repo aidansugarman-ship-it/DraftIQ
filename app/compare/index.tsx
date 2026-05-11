@@ -522,14 +522,14 @@ export default function CompareScreen() {
                 <Text variant="label" color={colors.textTertiary} style={styles.metricsTitle}>
                   AI VERDICT
                 </Text>
-                <View style={[styles.verdictCard, { borderColor: `${colors.accent}30` }]}>
+                <View style={[styles.verdictCard, { borderColor: `${colors.green}30` }]}>
                   <View style={styles.verdictName}>
-                    <Text variant="bodySmallMedium" color={colors.accent}>
+                    <Text variant="bodySmallMedium" color={colors.green}>
                       {playerA!.name} vs {playerB!.name}
                     </Text>
                   </View>
                   {verdictLoading
-                    ? <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: spacing.sm }} />
+                    ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: spacing.sm }} />
                     : <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 20, marginTop: spacing.sm }}>
                         {aiVerdict || `${playerA!.aiVerdict} | ${playerB!.aiVerdict}`}
                       </Text>

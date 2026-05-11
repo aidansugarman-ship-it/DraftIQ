@@ -211,7 +211,7 @@ export default function GMReportScreen() {
           <SectionLabel label="AI SUMMARY" />
           <View style={styles.summaryCard}>
             {summaryLoading
-              ? <ActivityIndicator size="small" color={colors.accent} />
+              ? <ActivityIndicator size="small" color={colors.green} />
               : <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 22 }}>{aiSummary || r.summary}</Text>
             }
           </View>

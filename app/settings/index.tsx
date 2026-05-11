@@ -50,10 +50,10 @@ function Row({
       activeOpacity={onPress ? 0.7 : 1}
     >
       <View style={styles.rowLeft}>
-        <Ionicons name={icon} size={20} color={danger ? colors.error : colors.accent} />
-        <Text style={[styles.rowLabel, danger && { color: colors.error }]}>{label}</Text>
+        <Ionicons name={icon} size={20} color={danger ? colors.coral : colors.green} />
+        <Text style={[styles.rowLabel, danger && { color: colors.coral }]}>{label}</Text>
       </View>
-      {right ?? (onPress && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />)}
+      {right ?? (onPress && <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />)}
     </TouchableOpacity>
   );
 }
@@ -103,7 +103,7 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
         <View style={{ width: 40 }} />
@@ -126,12 +126,12 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="NOTIFICATIONS">
-          <Row icon="fitness-outline"    label="Injury Alerts"      right={<Switch value={notifs.injuryAlerts}   onValueChange={() => toggle('injuryAlerts')}   trackColor={{ true: colors.accent }} thumbColor="#fff" />} />
-          <Row icon="people-outline"     label="Waiver Alerts"      right={<Switch value={notifs.waiverAlerts}   onValueChange={() => toggle('waiverAlerts')}   trackColor={{ true: colors.accent }} thumbColor="#fff" />} />
-          <Row icon="trending-up-outline" label="Sleeper Alerts"    right={<Switch value={notifs.sleeperAlerts}  onValueChange={() => toggle('sleeperAlerts')}  trackColor={{ true: colors.accent }} thumbColor="#fff" />} />
-          <Row icon="document-text-outline" label="Weekly GM Report" right={<Switch value={notifs.gmReport}      onValueChange={() => toggle('gmReport')}       trackColor={{ true: colors.accent }} thumbColor="#fff" />} />
-          <Row icon="calendar-outline"   label="Draft Reminders"    right={<Switch value={notifs.draftReminders} onValueChange={() => toggle('draftReminders')} trackColor={{ true: colors.accent }} thumbColor="#fff" />} />
-          <Row icon="rainy-outline"      label="Weather Alerts"     right={<Switch value={notifs.weatherAlerts}  onValueChange={() => toggle('weatherAlerts')}  trackColor={{ true: colors.accent }} thumbColor="#fff" />} last />
+          <Row icon="fitness-outline"    label="Injury Alerts"      right={<Switch value={notifs.injuryAlerts}   onValueChange={() => toggle('injuryAlerts')}   trackColor={{ true: colors.green }} thumbColor="#fff" />} />
+          <Row icon="people-outline"     label="Waiver Alerts"      right={<Switch value={notifs.waiverAlerts}   onValueChange={() => toggle('waiverAlerts')}   trackColor={{ true: colors.green }} thumbColor="#fff" />} />
+          <Row icon="trending-up-outline" label="Sleeper Alerts"    right={<Switch value={notifs.sleeperAlerts}  onValueChange={() => toggle('sleeperAlerts')}  trackColor={{ true: colors.green }} thumbColor="#fff" />} />
+          <Row icon="document-text-outline" label="Weekly GM Report" right={<Switch value={notifs.gmReport}      onValueChange={() => toggle('gmReport')}       trackColor={{ true: colors.green }} thumbColor="#fff" />} />
+          <Row icon="calendar-outline"   label="Draft Reminders"    right={<Switch value={notifs.draftReminders} onValueChange={() => toggle('draftReminders')} trackColor={{ true: colors.green }} thumbColor="#fff" />} />
+          <Row icon="rainy-outline"      label="Weather Alerts"     right={<Switch value={notifs.weatherAlerts}  onValueChange={() => toggle('weatherAlerts')}  trackColor={{ true: colors.green }} thumbColor="#fff" />} last />
         </Section>
 
         <Section title="ACCOUNT">
@@ -159,11 +159,11 @@ const styles = StyleSheet.create({
   title:        { fontSize: 18, fontWeight: '700', color: colors.text },
   content:      { paddingHorizontal: spacing.md, paddingBottom: 40 },
   section:      { marginBottom: spacing.lg },
-  sectionTitle: { fontSize: 11, fontWeight: '700', color: colors.textMuted, letterSpacing: 1, marginBottom: spacing.xs, marginLeft: 4 },
+  sectionTitle: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, letterSpacing: 1, marginBottom: spacing.xs, marginLeft: 4 },
   sectionCard:  { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
   row:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 14 },
   rowBorder:    { borderBottomWidth: 1, borderBottomColor: colors.border },
   rowLeft:      { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowLabel:     { fontSize: 15, color: colors.text },
-  version:      { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.md },
+  version:      { textAlign: 'center', color: colors.textTertiary, fontSize: 12, marginTop: spacing.md },
 });

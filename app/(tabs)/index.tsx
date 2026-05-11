@@ -1,10 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,8 +23,19 @@ import { typography } from '@constants/typography';
 import { TIERS } from '@constants/tiers';
 import { SPORTS } from '@constants/sports';
 import { useUserStore } from '@store/useUserStore';
+import { sleeper, SleeperPlayer, TrendingPlayer } from '@services/sleeper';
 
-// ─── Mock data (replace with real queries later) ─────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface LiveTrendPlayer {
+  id:    string;
+  name:  string;
+  pos:   string;
+  team:  string;
+  count: number;
+}
+
+// ─── Mock alerts (replace with push notification store later) ─────────────────
 const MOCK_ALERTS = [
   {
     id: '1',
@@ -56,12 +66,47 @@ const MOCK_ALERTS = [
   },
 ];
 
-const MOCK_TRENDING = [
-  { id: 'p1', name: 'CJ Stroud',      pos: 'QB', team: 'HOU', score: 92, trend: 'up'   as const },
-  { id: 'p2', name: 'Puka Nacua',     pos: 'WR', team: 'LAR', score: 88, trend: 'up'   as const },
-  { id: 'p3', name: 'Sam LaPorta',    pos: 'TE', team: 'DET', score: 84, trend: 'stable' as const },
-  { id: 'p4', name: "De'Von Achane",  pos: 'RB', team: 'MIA', score: 79, trend: 'down' as const },
-];
+const FANTASY_POS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
+
+// ─── Live trending hook ───────────────────────────────────────────────────────
+
+function useLiveTrending() {
+  const [players, setPlayers] = useState<LiveTrendPlayer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [adds, allPlayers] = await Promise.all([
+          sleeper.getTrendingAdds(25),
+          sleeper.getAllPlayers(),
+        ]);
+        if (cancelled) return;
+        const result: LiveTrendPlayer[] = adds
+          .map((a) => {
+            const p = allPlayers[a.player_id] as SleeperPlayer | undefined;
+            if (!p || !FANTASY_POS.has(p.position) || !p.team) return null;
+            return {
+              id:    a.player_id,
+              name:  p.full_name || `${p.first_name} ${p.last_name}`,
+              pos:   p.position,
+              team:  p.team,
+              count: a.count,
+            };
+          })
+          .filter((x): x is LiveTrendPlayer => x !== null)
+          .slice(0, 4);
+        setPlayers(result);
+      } catch { /* silent — keep empty state */ }
+      finally { if (!cancelled) setLoading(false); }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  return { players, loading };
+}
 
 // ─── Subcomponents ────────────────────────────────────────────────────────────
 
@@ -107,8 +152,8 @@ function AlertCard({
 }
 
 function TrendingRow({
-  name, pos, team, score, trend, delay,
-}: typeof MOCK_TRENDING[number] & { delay: number }) {
+  item, delay,
+}: { item: LiveTrendPlayer; delay: number }) {
   const op = useSharedValue(0);
   const tx = useSharedValue(-8);
   useEffect(() => {
@@ -117,179 +162,37 @@ function TrendingRow({
   }, []);
   const style = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateX: tx.value }] }));
 
-  const trendColor = trend === 'up' ? colors.green : trend === 'down' ? colors.coral : colors.textTertiary;
-  const trendIcon  = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
-
   return (
     <Animated.View style={[trendStyles.row, style]}>
       <View style={trendStyles.posTag}>
-        <Text variant="labelSmall" color={colors.textTertiary}>{pos}</Text>
+        <Text variant="labelSmall" color={colors.textTertiary}>{item.pos}</Text>
       </View>
       <View style={trendStyles.info}>
-        <Text variant="bodyMedium" color={colors.textPrimary}>{name}</Text>
-        <Text variant="caption" color={colors.textTertiary}>{team}</Text>
+        <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1}>{item.name}</Text>
+        <Text variant="caption" color={colors.textTertiary}>{item.team}</Text>
       </View>
-      <Text style={[trendStyles.trendArrow, { color: trendColor }]}>{trendIcon}</Text>
-      <View style={trendStyles.scoreWrap}>
-        <Text style={[trendStyles.score, { color: scoreColor(score) }]}>{score}</Text>
+      <Text style={trendStyles.arrow}>↑</Text>
+      <View style={trendStyles.countPill}>
+        <Text variant="labelSmall" style={{ color: colors.green }}>+{item.count.toLocaleString()}</Text>
       </View>
     </Animated.View>
   );
 }
 
-function scoreColor(n: number) {
-  if (n >= 90) return colors.green;
-  if (n >= 75) return colors.gold;
-  return colors.textSecondary;
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-
-export default function HomeScreen() {
-  const user = useUserStore((s) => s.user);
-  const tier = useUserStore((s) => s.tier);
-
-  const heroOp = useSharedValue(0);
-  const heroTy = useSharedValue(12);
-  useEffect(() => {
-    heroOp.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) });
-    heroTy.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) });
-  }, []);
-  const heroStyle = useAnimatedStyle(() => ({
-    opacity:   heroOp.value,
-    transform: [{ translateY: heroTy.value }],
-  }));
-
-  const greeting = getGreeting();
-  const firstName = user?.displayName?.split(' ')[0] ?? 'GM';
-  const sport     = user?.primarySport ?? 'nfl';
-  const sportDef  = SPORTS[sport];
-  const league    = user?.leagueSettings;
-
+function TrendingSkeleton() {
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ── Hero header ─────────────────────────────────────────────── */}
-          <Animated.View style={[styles.header, heroStyle]}>
-            <View style={styles.headerTop}>
-              <View>
-                <Text variant="caption" color={colors.textTertiary} style={styles.greetLabel}>
-                  {greeting}
-                </Text>
-                <Text style={styles.heroName}>{firstName.toUpperCase()}</Text>
-              </View>
-              <View style={styles.headerRight}>
-                <TierBadge tier={tier} />
-                <TouchableOpacity
-                  style={styles.notifBtn}
-                  onPress={() => router.push('/profile')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* League context pill */}
-            {league && (
-              <View style={styles.leaguePill}>
-                <Text style={styles.sportEmoji}>{sportDef.emoji}</Text>
-                <Text variant="bodySmallMedium" color={colors.textSecondary}>
-                  {sportDef.shortLabel}
-                  {' · '}
-                  {league.numTeams}-team
-                  {' · '}
-                  {league.scoringType?.toUpperCase()}
-                  {league.isDynasty ? ' · Dynasty' : ''}
-                </Text>
-              </View>
-            )}
-          </Animated.View>
-
-          {/* ── Quick Actions ────────────────────────────────────────────── */}
-          <View style={styles.quickRow}>
-            <QuickAction
-              emoji="⚡"
-              label="Mock Draft"
-              accent={colors.green}
-              onPress={() => router.push('/draft')}
-              delay={100}
-            />
-            <QuickAction
-              emoji="📋"
-              label="My Board"
-              accent={colors.blue}
-              onPress={() => router.push('/(tabs)/board')}
-              delay={175}
-            />
-            <QuickAction
-              emoji="📊"
-              label="GM Report"
-              accent={colors.gold}
-              onPress={() => router.push('/gm-report')}
-              delay={250}
-            />
-            <QuickAction
-              emoji="🔄"
-              label="Trade Tool"
-              accent={colors.purple}
-              onPress={() => router.push('/trade')}
-              delay={325}
-            />
+    <>
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={[trendStyles.row, { opacity: 0.3 }]}>
+          <View style={[trendStyles.posTag, skeletonStyles.block]} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <View style={[skeletonStyles.block, { height: 14, width: '60%', borderRadius: radius.xs }]} />
+            <View style={[skeletonStyles.block, { height: 11, width: '30%', borderRadius: radius.xs }]} />
           </View>
-
-          {/* ── Alerts ──────────────────────────────────────────────────── */}
-          <SectionHeader label="ALERTS" action="See all" onAction={() => {}} />
-          <View style={styles.alertList}>
-            {MOCK_ALERTS.map((a, i) => (
-              <AlertCard key={a.id} {...a} delay={200 + i * 80} />
-            ))}
-          </View>
-
-          {/* ── Trending ────────────────────────────────────────────────── */}
-          <SectionHeader
-            label="TRENDING"
-            action="Full board"
-            onAction={() => router.push('/(tabs)/board')}
-          />
-          <View style={styles.trendCard}>
-            {MOCK_TRENDING.map((p, i) => (
-              <TrendingRow key={p.id} {...p} delay={350 + i * 60} />
-            ))}
-          </View>
-
-          {/* ── GM Report upsell (non-GM) ────────────────────────────────── */}
-          {tier !== 'gm' && (
-            <TouchableOpacity
-              style={styles.gmCard}
-              onPress={() => router.push('/paywall')}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.04)']}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.gmCardInner}>
-                <Text style={styles.gmEmoji}>👑</Text>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium" color={colors.gold}>Unlock GM Mode</Text>
-                  <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                    Weekly AI team reports, live draft companion, unlimited waiver alerts.
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.gold} />
-              </View>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+          <View style={[skeletonStyles.block, { height: 22, width: 52, borderRadius: radius.full }]} />
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -328,10 +231,20 @@ function QuickAction({
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
-function SectionHeader({ label, action, onAction }: { label: string; action?: string; onAction?: () => void }) {
+function SectionHeader({ label, action, onAction, live }: {
+  label: string; action?: string; onAction?: () => void; live?: boolean;
+}) {
   return (
     <View style={shStyles.row}>
-      <Text variant="label" color={colors.textTertiary} style={shStyles.label}>{label}</Text>
+      <View style={shStyles.left}>
+        <Text variant="label" color={colors.textTertiary} style={shStyles.label}>{label}</Text>
+        {live && (
+          <View style={shStyles.livePill}>
+            <View style={shStyles.liveDot} />
+            <Text variant="labelSmall" style={{ color: colors.green, fontSize: 9 }}>LIVE</Text>
+          </View>
+        )}
+      </View>
       {action && (
         <TouchableOpacity onPress={onAction} activeOpacity={0.7}>
           <Text variant="caption" color={colors.green}>{action}</Text>
@@ -348,6 +261,167 @@ function getGreeting() {
   if (h < 12) return 'GOOD MORNING,';
   if (h < 17) return 'GOOD AFTERNOON,';
   return 'GOOD EVENING,';
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+export default function HomeScreen() {
+  const user = useUserStore((s) => s.user);
+  const tier = useUserStore((s) => s.tier);
+  const { players: trendPlayers, loading: trendLoading } = useLiveTrending();
+
+  const heroOp = useSharedValue(0);
+  const heroTy = useSharedValue(12);
+  useEffect(() => {
+    heroOp.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) });
+    heroTy.value = withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) });
+  }, []);
+  const heroStyle = useAnimatedStyle(() => ({
+    opacity:   heroOp.value,
+    transform: [{ translateY: heroTy.value }],
+  }));
+
+  const greeting  = getGreeting();
+  const firstName = user?.displayName?.split(' ')[0] ?? 'GM';
+  const sport     = user?.primarySport ?? 'nfl';
+  const sportDef  = SPORTS[sport];
+  const league    = user?.leagueSettings;
+
+  return (
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ── Hero header ─────────────────────────────────────────────── */}
+          <Animated.View style={[styles.header, heroStyle]}>
+            <View style={styles.headerTop}>
+              <View>
+                <Text variant="caption" color={colors.textTertiary} style={styles.greetLabel}>
+                  {greeting}
+                </Text>
+                <Text style={styles.heroName}>{firstName.toUpperCase()}</Text>
+              </View>
+              <View style={styles.headerRight}>
+                <TierBadge tier={tier} />
+                <TouchableOpacity
+                  style={styles.notifBtn}
+                  onPress={() => router.push('/ask-ai')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="flash" size={18} color={colors.green} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {league && (
+              <View style={styles.leaguePill}>
+                <Text style={styles.sportEmoji}>{sportDef.emoji}</Text>
+                <Text variant="bodySmallMedium" color={colors.textSecondary}>
+                  {sportDef.shortLabel}
+                  {' · '}
+                  {league.numTeams}-team
+                  {' · '}
+                  {league.scoringType?.toUpperCase()}
+                  {league.isDynasty ? ' · Dynasty' : ''}
+                </Text>
+              </View>
+            )}
+          </Animated.View>
+
+          {/* ── Quick Actions ────────────────────────────────────────────── */}
+          <View style={styles.quickRow}>
+            <QuickAction
+              emoji="⚡"
+              label="Mock Draft"
+              accent={colors.green}
+              onPress={() => router.push('/draft')}
+              delay={100}
+            />
+            <QuickAction
+              emoji="🔄"
+              label="Add/Drop"
+              accent={colors.coral}
+              onPress={() => router.push('/add-drop')}
+              delay={175}
+            />
+            <QuickAction
+              emoji="🏥"
+              label="Injuries"
+              accent={colors.gold}
+              onPress={() => router.push('/injuries')}
+              delay={250}
+            />
+            <QuickAction
+              emoji="🤖"
+              label="Ask AI"
+              accent={colors.purple}
+              onPress={() => router.push('/ask-ai')}
+              delay={325}
+            />
+          </View>
+
+          {/* ── Alerts ──────────────────────────────────────────────────── */}
+          <SectionHeader label="ALERTS" action="See all" onAction={() => {}} />
+          <View style={styles.alertList}>
+            {MOCK_ALERTS.map((a, i) => (
+              <AlertCard key={a.id} {...a} delay={200 + i * 80} />
+            ))}
+          </View>
+
+          {/* ── Trending ────────────────────────────────────────────────── */}
+          <SectionHeader
+            label="TRENDING ADDS"
+            action="Full wire →"
+            onAction={() => router.push('/add-drop')}
+            live
+          />
+          <View style={styles.trendCard}>
+            {trendLoading ? (
+              <TrendingSkeleton />
+            ) : trendPlayers.length > 0 ? (
+              trendPlayers.map((p, i) => (
+                <TrendingRow key={p.id} item={p} delay={350 + i * 60} />
+              ))
+            ) : (
+              <View style={styles.trendEmpty}>
+                <Text variant="bodySmall" color={colors.textTertiary} align="center">
+                  Could not load trending data.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* ── GM Report upsell (non-GM) ────────────────────────────────── */}
+          {tier !== 'gm' && (
+            <TouchableOpacity
+              style={styles.gmCard}
+              onPress={() => router.push('/paywall')}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.04)']}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.gmCardInner}>
+                <Text style={styles.gmEmoji}>👑</Text>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium" color={colors.gold}>Unlock GM Mode</Text>
+                  <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                    Weekly AI team reports, live draft companion, unlimited waiver alerts.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.gold} />
+              </View>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -386,9 +460,9 @@ const styles = StyleSheet.create({
     width:           38,
     height:          38,
     borderRadius:    radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: `${colors.green}14`,
     borderWidth:     1,
-    borderColor:     colors.border,
+    borderColor:     `${colors.green}30`,
     alignItems:      'center',
     justifyContent:  'center',
   },
@@ -425,6 +499,10 @@ const styles = StyleSheet.create({
     borderRadius:    radius.lg,
     overflow:        'hidden',
     marginBottom:    spacing.xl,
+  },
+  trendEmpty: {
+    paddingVertical: spacing['2xl'],
+    alignItems:      'center',
   },
 
   gmCard: {
@@ -476,9 +554,9 @@ const alertStyles = StyleSheet.create({
   icon:   { fontSize: 20 },
   body:   { flex: 1, gap: 4 },
   row: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            spacing.xs,
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.xs,
   },
   accentBar: {
     position: 'absolute',
@@ -491,33 +569,35 @@ const alertStyles = StyleSheet.create({
 
 const trendStyles = StyleSheet.create({
   row: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    paddingVertical: spacing.md,
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingVertical:   spacing.md,
     paddingHorizontal: spacing.base,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap:            spacing.md,
+    gap:               spacing.md,
   },
   posTag: {
-    width:          36,
+    width:           36,
     paddingVertical: 3,
     backgroundColor: colors.surfaceElevated,
-    borderRadius:   radius.xs,
-    alignItems:     'center',
+    borderRadius:    radius.xs,
+    alignItems:      'center',
   },
-  info:   { flex: 1, gap: 2 },
-  trendArrow: {
-    ...typography.h4,
-    fontSize: 18,
+  info: { flex: 1, gap: 2 },
+  arrow: {
+    fontSize:  18,
+    color:     colors.green,
+    width:     20,
+    textAlign: 'center',
   },
-  scoreWrap: {
-    width:          44,
-    alignItems:     'flex-end',
-  },
-  score: {
-    ...typography.stat,
-    fontSize: 22,
+  countPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   3,
+    borderRadius:      radius.full,
+    backgroundColor:  `${colors.green}14`,
+    borderWidth:       1,
+    borderColor:       `${colors.green}30`,
   },
 });
 
@@ -548,5 +628,33 @@ const shStyles = StyleSheet.create({
     alignItems:     'center',
     marginBottom:   spacing.md,
   },
+  left: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.sm,
+  },
   label: { letterSpacing: 1 },
+  livePill: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             3,
+    backgroundColor: `${colors.green}18`,
+    borderRadius:    radius.full,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    borderWidth:     1,
+    borderColor:     `${colors.green}30`,
+  },
+  liveDot: {
+    width:           5,
+    height:          5,
+    borderRadius:    3,
+    backgroundColor: colors.green,
+  },
+});
+
+const skeletonStyles = StyleSheet.create({
+  block: {
+    backgroundColor: colors.surfaceElevated,
+  },
 });

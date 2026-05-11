@@ -58,7 +58,7 @@ export default function AskAIScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <LinearGradient colors={['#00FF87', '#00D4FF']} style={styles.aiDot} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
@@ -109,7 +109,7 @@ export default function AskAIScreen() {
                 <Ionicons name="flash" size={12} color="#000" />
               </LinearGradient>
               <View style={styles.typingBubble}>
-                <ActivityIndicator size="small" color={colors.accent} />
+                <ActivityIndicator size="small" color={colors.green} />
               </View>
             </View>
           )}
@@ -121,7 +121,7 @@ export default function AskAIScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="Ask anything fantasy..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.textTertiary}
             multiline
             maxLength={500}
             returnKeyType="send"
@@ -138,7 +138,7 @@ export default function AskAIScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Ionicons name="arrow-up" size={20} color={input.trim() && !loading ? '#000' : colors.textMuted} />
+              <Ionicons name="arrow-up" size={20} color={input.trim() && !loading ? '#000' : colors.textTertiary} />
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -153,11 +153,11 @@ const styles = StyleSheet.create({
   backBtn:          { width: 40, height: 40, justifyContent: 'center' },
   headerCenter:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
   aiDot:            { width: 10, height: 10, borderRadius: 5 },
-  title:            { fontSize: 18, fontWeight: '700', color: colors.text },
+  title:            { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   messages:         { flex: 1 },
   messagesContent:  { padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl },
   suggestions:      { marginBottom: spacing.md },
-  suggestionsLabel: { color: colors.textMuted, fontSize: 13, marginBottom: spacing.sm },
+  suggestionsLabel: { color: colors.textTertiary, fontSize: 13, marginBottom: spacing.sm },
   suggestionChip:   { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, marginBottom: spacing.xs, borderWidth: 1, borderColor: colors.border },
   suggestionText:   { color: colors.textSecondary, fontSize: 14 },
   bubble:           { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
@@ -165,14 +165,14 @@ const styles = StyleSheet.create({
   aiBubble:         { justifyContent: 'flex-start' },
   aiAvatar:         { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 2, flexShrink: 0 },
   bubbleContent:    { maxWidth: '80%', borderRadius: radius.lg, padding: spacing.sm },
-  userContent:      { backgroundColor: colors.accent },
+  userContent:      { backgroundColor: colors.green },
   aiContent:        { backgroundColor: colors.surface },
-  bubbleText:       { fontSize: 15, color: colors.text, lineHeight: 22 },
+  bubbleText:       { fontSize: 15, color: colors.textPrimary, lineHeight: 22 },
   userText:         { color: '#000' },
   typingBubble:     { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.sm, minWidth: 60, alignItems: 'center' },
   inputRow:         { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
-  input:            { flex: 1, backgroundColor: colors.surface, borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.text, fontSize: 15, maxHeight: 120, borderWidth: 1, borderColor: colors.border },
+  input:            { flex: 1, backgroundColor: colors.surface, borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, color: colors.textPrimary, fontSize: 15, maxHeight: 120, borderWidth: 1, borderColor: colors.border },
   sendBtn:          { width: 44, height: 44, borderRadius: 22, overflow: 'hidden' },
   sendBtnDisabled:  { opacity: 0.5 },
-  sendGradient:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  sendGradient:     { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 22 },
 });

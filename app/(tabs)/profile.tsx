@@ -143,6 +143,14 @@ export default function ProfileScreen() {
                 <Text variant="bodySmall" color={colors.textTertiary} style={{ marginTop: 2 }}>
                   {user?.email}
                 </Text>
+                {user?.sleeperUsername && (
+                  <View style={sleeperStyles.pill}>
+                    <Text style={sleeperStyles.sleeperS}>S</Text>
+                    <Text variant="caption" color={colors.textSecondary}>
+                      {user.sleeperUsername}
+                    </Text>
+                  </View>
+                )}
               </View>
               <View style={[tierBadgeStyles.badge, { borderColor: `${tierDef.color}60`, backgroundColor: `${tierDef.color}18` }]}>
                 <Text variant="labelSmall" style={{ color: tierDef.color, letterSpacing: 1 }}>
@@ -402,6 +410,28 @@ const sectionStyles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom:  spacing.sm,
     marginTop:     spacing.xs,
+  },
+});
+
+const sleeperStyles = StyleSheet.create({
+  pill: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             4,
+    marginTop:       4,
+    alignSelf:       'flex-start',
+    backgroundColor: 'rgba(0,200,255,0.08)',
+    borderRadius:    radius.full,
+    paddingHorizontal: 8,
+    paddingVertical:   2,
+    borderWidth:     1,
+    borderColor:     'rgba(0,200,255,0.2)',
+  },
+  sleeperS: {
+    fontSize:    10,
+    fontWeight:  '700',
+    color:       '#00C8FF',
+    letterSpacing: 0.5,
   },
 });
 
