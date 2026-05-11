@@ -17,7 +17,8 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.sugarman.draftiq",
+      "bundleIdentifier": "com.draftiq.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "DraftIQ uses your camera to update your profile photo.",
