@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: colors.background },
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   backBtn:      { width: 40, height: 40, justifyContent: 'center' },
-  title:        { fontSize: 18, fontWeight: '700', color: colors.text },
+  title:        { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   content:      { paddingHorizontal: spacing.md, paddingBottom: 40 },
   section:      { marginBottom: spacing.lg },
   sectionTitle: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, letterSpacing: 1, marginBottom: spacing.xs, marginLeft: 4 },
@@ -164,6 +164,6 @@ const styles = StyleSheet.create({
   row:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 14 },
   rowBorder:    { borderBottomWidth: 1, borderBottomColor: colors.border },
   rowLeft:      { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  rowLabel:     { fontSize: 15, color: colors.text },
+  rowLabel:     { fontSize: 15, color: colors.textPrimary },
   version:      { textAlign: 'center', color: colors.textTertiary, fontSize: 12, marginTop: spacing.md },
 });
