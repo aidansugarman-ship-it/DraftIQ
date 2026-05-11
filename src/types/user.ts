@@ -15,8 +15,9 @@ export interface UserProfile {
   preferredSports: SportId[];
   leagueSettings?: LeagueSettings;
   archetype?: TeamArchetype;
-  gmBadge: boolean;             // GM tier badge
-  pushToken?: string;           // FCM token
+  gmBadge: boolean;
+  pushToken?: string;
+  sleeperUsername?: string;
   notificationPreferences: NotificationPreferences;
   connectedLeagues: ConnectedLeague[];
   draftBoardIds: string[];      // refs to draftBoards subcollection
