@@ -12,6 +12,9 @@
     "type-check": "tsc --noEmit",
     "postinstall": "node scripts/patch-native.js"
   },
+  "resolutions": {
+    "@react-native/dev-middleware": "0.77.0"
+  },
   "dependencies": {
     "expo": "~54.0.0",
     "expo-router": "~4.0.17",
