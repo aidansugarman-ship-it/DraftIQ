@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { sleeper, SleeperPlayer } from '@services/sleeper';
 import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,150 +23,35 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type InjuryStatus = 'OUT' | 'DOUBTFUL' | 'QUESTIONABLE' | 'LIMITED' | 'FULL';
-type Pos = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
-type ImpactLevel = 'critical' | 'high' | 'medium' | 'low';
+type Pos          = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
+type ImpactLevel  = 'critical' | 'high' | 'medium' | 'low';
 
 interface InjuryReport {
-  id:         string;
-  name:       string;
-  team:       string;
-  pos:        Pos;
-  status:     InjuryStatus;
-  injury:     string;
-  bodyPart:   string;
-  impact:     ImpactLevel;
-  timeline:   string;
-  owned:      number;
-  aiTake:     string;
-  handcuff?:  string;
-  updatedAt:  string;
+  id:        string;
+  name:      string;
+  team:      string;
+  pos:       Pos;
+  status:    InjuryStatus;
+  injury:    string;
+  bodyPart:  string;
+  impact:    ImpactLevel;
+  timeline:  string;
+  owned:     number;
+  aiTake:    string;
+  handcuff?: string;
+  updatedAt: string;
 }
 
-const MOCK_INJURIES: InjuryReport[] = [
-  {
-    id: '1',
-    name: 'Derrick Henry',
-    team: 'BAL',
-    pos: 'RB',
-    status: 'OUT',
-    injury: 'Hamstring strain',
-    bodyPart: 'Hamstring',
-    impact: 'critical',
-    timeline: '2–3 weeks',
-    owned: 94,
-    aiTake: 'Start Justice Hill and Gus Edwards immediately. Henry is done for the month.',
-    handcuff: 'Justice Hill',
-    updatedAt: '2h ago',
-  },
-  {
-    id: '2',
-    name: 'Christian Watson',
-    team: 'GB',
-    pos: 'WR',
-    status: 'OUT',
-    injury: 'Hamstring (IR)',
-    bodyPart: 'Hamstring',
-    impact: 'critical',
-    timeline: 'Season-ending',
-    owned: 72,
-    aiTake: 'Romeo Doubs and Jayden Reed are the clear beneficiaries. Add both immediately.',
-    handcuff: 'Romeo Doubs',
-    updatedAt: '1d ago',
-  },
-  {
-    id: '3',
-    name: 'JuJu Smith-Schuster',
-    team: 'NE',
-    pos: 'WR',
-    status: 'OUT',
-    injury: 'Knee (IR)',
-    bodyPart: 'Knee',
-    impact: 'high',
-    timeline: 'Season-ending',
-    owned: 41,
-    aiTake: 'Demario Douglas absorbs the slot targets. Deep league add only.',
-    handcuff: 'Demario Douglas',
-    updatedAt: '1d ago',
-  },
-  {
-    id: '4',
-    name: 'J.K. Dobbins',
-    team: 'LAC',
-    pos: 'RB',
-    status: 'DOUBTFUL',
-    injury: 'Ankle sprain',
-    bodyPart: 'Ankle',
-    impact: 'high',
-    timeline: '1–2 weeks',
-    owned: 68,
-    aiTake: 'Gus Edwards is the handcuff. Start him as RB2 this week if Dobbins is out.',
-    handcuff: 'Gus Edwards',
-    updatedAt: '4h ago',
-  },
-  {
-    id: '5',
-    name: 'Tee Higgins',
-    team: 'CIN',
-    pos: 'WR',
-    status: 'QUESTIONABLE',
-    injury: 'Hamstring tightness',
-    bodyPart: 'Hamstring',
-    impact: 'medium',
-    timeline: 'Day-to-day',
-    owned: 85,
-    aiTake: 'Monitor practice reports Thursday/Friday. If he\'s limited, consider a streamer.',
-    updatedAt: '6h ago',
-  },
-  {
-    id: '6',
-    name: 'Mark Andrews',
-    team: 'BAL',
-    pos: 'TE',
-    status: 'QUESTIONABLE',
-    injury: 'Shoulder',
-    bodyPart: 'Shoulder',
-    impact: 'medium',
-    timeline: 'Day-to-day',
-    owned: 88,
-    aiTake: 'He practiced limited Wednesday. 60/40 to play. Have Isaiah Likely ready.',
-    handcuff: 'Isaiah Likely',
-    updatedAt: '3h ago',
-  },
-  {
-    id: '7',
-    name: 'Durham Smythe',
-    team: 'MIA',
-    pos: 'TE',
-    status: 'OUT',
-    injury: 'Knee',
-    bodyPart: 'Knee',
-    impact: 'medium',
-    timeline: '4–6 weeks',
-    owned: 8,
-    aiTake: 'Jonnu Smith is the direct beneficiary. Add in TE-needy leagues.',
-    handcuff: 'Jonnu Smith',
-    updatedAt: '12h ago',
-  },
-  {
-    id: '8',
-    name: 'Boston Scott',
-    team: 'PHI',
-    pos: 'RB',
-    status: 'LIMITED',
-    injury: 'Rib contusion',
-    bodyPart: 'Ribs',
-    impact: 'low',
-    timeline: 'Day-to-day',
-    owned: 12,
-    aiTake: 'Low-end handcuff. No fantasy value unless D\'Andre Swift also gets hurt.',
-    updatedAt: '8h ago',
-  },
-];
-
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const FANTASY_POS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
+
+const STATUS_ORDER: Record<InjuryStatus, number> = {
+  OUT: 0, DOUBTFUL: 1, QUESTIONABLE: 2, LIMITED: 3, FULL: 4,
+};
 
 const STATUS_COLORS: Record<InjuryStatus, string> = {
   OUT:          colors.coral,
@@ -199,6 +84,81 @@ const POS_COLORS: Record<Pos, string> = {
   DEF: colors.purple,
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function normalizeStatus(s: string): InjuryStatus {
+  const l = s.toLowerCase();
+  if (l === 'ir' || l.includes('injured reserve') || l.includes('pup') || l === 'out') return 'OUT';
+  if (l.includes('doubt')) return 'DOUBTFUL';
+  if (l.includes('quest')) return 'QUESTIONABLE';
+  if (l.includes('limit') || l === 'lp') return 'LIMITED';
+  return 'QUESTIONABLE';
+}
+
+function rankToImpact(rank: number): ImpactLevel {
+  if (rank < 30)  return 'critical';
+  if (rank < 100) return 'high';
+  if (rank < 250) return 'medium';
+  return 'low';
+}
+
+function statusToTimeline(s: string): string {
+  const l = s.toLowerCase();
+  if (l === 'ir' || l.includes('injured reserve')) return 'Season-ending';
+  if (l.includes('pup'))   return 'Out until Week 5+';
+  if (l === 'out')         return 'Week-to-week';
+  if (l.includes('doubt')) return '1–2 weeks';
+  if (l.includes('quest')) return 'Day-to-day';
+  if (l.includes('limit')) return 'Day-to-day';
+  return 'TBD';
+}
+
+function estimateOwnership(rank: number | null): number {
+  if (!rank) return 5;
+  if (rank < 10)  return 96;
+  if (rank < 30)  return 88;
+  if (rank < 75)  return 72;
+  if (rank < 150) return 54;
+  if (rank < 300) return 30;
+  return 12;
+}
+
+function safePos(pos: string): Pos {
+  return (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos) ? pos : 'WR') as Pos;
+}
+
+function buildReports(players: Record<string, SleeperPlayer>): InjuryReport[] {
+  return Object.values(players)
+    .filter(p =>
+      p.injury_status &&
+      FANTASY_POS.has(p.position) &&
+      p.search_rank !== null &&
+      p.search_rank < 500 &&
+      p.team !== null,
+    )
+    .map((p): InjuryReport => ({
+      id:        p.player_id,
+      name:      p.full_name || `${p.first_name} ${p.last_name}`,
+      team:      p.team || 'FA',
+      pos:       safePos(p.position),
+      status:    normalizeStatus(p.injury_status!),
+      injury:    p.injury_notes || p.injury_body_part || p.injury_status || 'Undisclosed',
+      bodyPart:  p.injury_body_part || 'Undisclosed',
+      impact:    rankToImpact(p.search_rank!),
+      timeline:  statusToTimeline(p.injury_status!),
+      owned:     estimateOwnership(p.search_rank),
+      aiTake:    '',
+      updatedAt: 'Live',
+    }))
+    .sort((a, b) => {
+      const impactOrder: Record<ImpactLevel, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+      const statusDiff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+      if (statusDiff !== 0) return statusDiff;
+      return impactOrder[a.impact] - impactOrder[b.impact];
+    })
+    .slice(0, 40);
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 type FilterTab = 'ALL' | 'OUT' | 'DOUBTFUL' | 'QUESTIONABLE';
@@ -222,9 +182,9 @@ function PosBadge({ pos }: { pos: Pos }) {
 }
 
 function InjuryCard({ report, index }: { report: InjuryReport; index: number }) {
-  const impactColor = IMPACT_COLORS[report.impact];
-  const [aiTake, setAiTake] = useState(report.aiTake);
-  const [aiLoading, setAiLoading] = useState(false);
+  const impactColor                   = IMPACT_COLORS[report.impact];
+  const [aiTake, setAiTake]           = useState('');
+  const [aiLoading, setAiLoading]     = useState(false);
 
   useEffect(() => {
     setAiLoading(true);
@@ -232,7 +192,7 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
       .then(setAiTake)
       .catch(() => {})
       .finally(() => setAiLoading(false));
-  }, [report.name]);
+  }, [report.id]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(10);
@@ -258,7 +218,10 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
         {/* Meta */}
         <View style={icard.meta}>
           <Text variant="caption" color={colors.textTertiary}>{report.team} · {report.injury}</Text>
-          <Text variant="caption" color={colors.textTertiary}>Updated {report.updatedAt}</Text>
+          <View style={icard.liveBadge}>
+            <View style={icard.liveDot} />
+            <Text variant="caption" style={{ color: colors.green }}>LIVE</Text>
+          </View>
         </View>
 
         {/* Stats row */}
@@ -270,7 +233,7 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
           <View style={icard.statDivider} />
           <View style={icard.statItem}>
             <Text variant="caption" color={colors.textTertiary} style={{ letterSpacing: 0.6 }}>OWNED</Text>
-            <Text variant="bodySmallMedium" color={colors.textPrimary}>{report.owned}%</Text>
+            <Text variant="bodySmallMedium" color={colors.textPrimary}>~{report.owned}%</Text>
           </View>
           <View style={icard.statDivider} />
           <View style={icard.statItem}>
@@ -286,7 +249,9 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
           <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
           {aiLoading
             ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: 6 }} />
-            : <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>{aiTake}</Text>
+            : aiTake
+              ? <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>{aiTake}</Text>
+              : null
           }
         </View>
 
@@ -307,7 +272,24 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function InjuriesScreen() {
-  const [filter, setFilter] = useState<FilterTab>('ALL');
+  const [filter, setFilter]           = useState<FilterTab>('ALL');
+  const [injuries, setInjuries]       = useState<InjuryReport[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  const loadInjuries = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const players  = await sleeper.getAllPlayers();
+      const reports  = buildReports(players);
+      setInjuries(reports);
+    } catch {
+      // keep empty
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadInjuries(); }, [loadInjuries]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -317,12 +299,11 @@ export default function InjuriesScreen() {
   }, []);
   const heroStyle = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
 
-  const filtered = MOCK_INJURIES.filter(r => {
-    if (filter === 'ALL') return true;
-    return r.status === filter;
-  });
-
-  const critCount = MOCK_INJURIES.filter(r => r.impact === 'critical').length;
+  const filtered  = injuries.filter(r => filter === 'ALL' || r.status === filter);
+  const critCount = injuries.filter(r => r.impact === 'critical').length;
+  const outCount  = injuries.filter(r => r.status === 'OUT').length;
+  const dbtCount  = injuries.filter(r => r.status === 'DOUBTFUL').length;
+  const qstCount  = injuries.filter(r => r.status === 'QUESTIONABLE').length;
 
   return (
     <View style={styles.container}>
@@ -343,20 +324,29 @@ export default function InjuriesScreen() {
           {/* Hero */}
           <Animated.View style={heroStyle}>
             <Text style={styles.title}>INJURY{'\n'}REPORT.</Text>
-            <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
-              Real-time status updates with AI fantasy impact analysis.
-            </Text>
+            <View style={styles.subtitleRow}>
+              <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
+                Live NFL injury statuses pulled from Sleeper — AI fantasy impact for each.
+              </Text>
+              <View style={styles.livePill}>
+                <View style={styles.liveDot} />
+                <Text variant="caption" style={{ color: colors.green }}>LIVE</Text>
+              </View>
+            </View>
           </Animated.View>
 
-          {/* Summary */}
+          {/* Summary pills */}
           <Animated.View style={[styles.summaryRow, heroStyle]}>
             {([
-              { status: 'OUT',          color: colors.coral,        count: MOCK_INJURIES.filter(r => r.status === 'OUT').length },
-              { status: 'DOUBTFUL',     color: '#FF7A4A',           count: MOCK_INJURIES.filter(r => r.status === 'DOUBTFUL').length },
-              { status: 'QUESTIONABLE', color: colors.gold,         count: MOCK_INJURIES.filter(r => r.status === 'QUESTIONABLE').length },
+              { status: 'OUT',          color: colors.coral,  count: outCount },
+              { status: 'DOUBTFUL',     color: '#FF7A4A',     count: dbtCount },
+              { status: 'QUESTIONABLE', color: colors.gold,   count: qstCount },
             ] as const).map(s => (
               <View key={s.status} style={[styles.summaryPill, { borderColor: `${s.color}30`, backgroundColor: `${s.color}0A` }]}>
-                <Text variant="h3" style={{ color: s.color }}>{s.count}</Text>
+                {dataLoading
+                  ? <ActivityIndicator size="small" color={s.color} />
+                  : <Text variant="h3" style={{ color: s.color }}>{s.count}</Text>
+                }
                 <Text variant="caption" color={colors.textTertiary} style={{ letterSpacing: 0.6, textAlign: 'center' }}>
                   {s.status}
                 </Text>
@@ -384,16 +374,23 @@ export default function InjuriesScreen() {
             ))}
           </View>
 
-          {/* Report cards */}
-          {filtered.map((report, i) => (
-            <InjuryCard key={report.id} report={report} index={i} />
-          ))}
-
-          {filtered.length === 0 && (
+          {/* Cards */}
+          {dataLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={colors.green} />
+              <Text variant="bodySmall" color={colors.textTertiary} style={{ marginTop: spacing.md }}>
+                Loading live injury data…
+              </Text>
+            </View>
+          ) : filtered.length > 0 ? (
+            filtered.map((report, i) => (
+              <InjuryCard key={report.id} report={report} index={i} />
+            ))
+          ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>🏥</Text>
               <Text variant="body" color={colors.textSecondary} align="center">
-                No players with {filter} status.
+                No players with {filter} status right now.
               </Text>
             </View>
           )}
@@ -416,23 +413,23 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
     paddingHorizontal: spacing.base,
     paddingVertical:   spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width:          36,
-    height:         36,
-    borderRadius:   radius.sm,
+    width:           36,
+    height:          36,
+    borderRadius:    radius.sm,
     backgroundColor: colors.surface,
-    borderWidth:    1,
-    borderColor:    colors.border,
-    alignItems:     'center',
-    justifyContent: 'center',
+    borderWidth:     1,
+    borderColor:     colors.border,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   critBadge: {
     width:           28,
@@ -453,29 +450,53 @@ const styles = StyleSheet.create({
     marginTop:    spacing.xl,
     marginBottom: spacing.sm,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    gap:           spacing.md,
+    marginBottom:  spacing.xl,
+  },
   subtitle: {
-    lineHeight:   22,
-    marginBottom: spacing.xl,
+    flex:       1,
+    lineHeight: 22,
+  },
+  livePill: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               5,
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderRadius:      radius.full,
+    backgroundColor:   `${colors.green}12`,
+    borderWidth:       1,
+    borderColor:       `${colors.green}30`,
+    marginTop:         2,
+  },
+  liveDot: {
+    width:           6,
+    height:          6,
+    borderRadius:    3,
+    backgroundColor: colors.green,
   },
 
   summaryRow: {
-    flexDirection:  'row',
-    gap:            spacing.md,
-    marginBottom:   spacing.xl,
+    flexDirection: 'row',
+    gap:           spacing.md,
+    marginBottom:  spacing.xl,
   },
   summaryPill: {
-    flex:           1,
-    alignItems:     'center',
-    borderWidth:    1,
-    borderRadius:   radius.lg,
+    flex:            1,
+    alignItems:      'center',
+    borderWidth:     1,
+    borderRadius:    radius.lg,
     paddingVertical: spacing.md,
-    gap:            4,
+    gap:             4,
   },
 
   filterRow: {
-    flexDirection:  'row',
-    gap:            spacing.xs,
-    marginBottom:   spacing.lg,
+    flexDirection: 'row',
+    gap:           spacing.xs,
+    marginBottom:  spacing.lg,
   },
   filterTab: {
     flex:            1,
@@ -491,12 +512,16 @@ const styles = StyleSheet.create({
     borderColor:     colors.textTertiary,
   },
 
+  loadingBox: {
+    alignItems: 'center',
+    paddingTop: spacing['2xl'],
+  },
   emptyState: {
     alignItems: 'center',
     paddingTop: spacing['2xl'],
     gap:        spacing.md,
   },
-  emptyEmoji: { fontSize: 36 },
+  emptyEmoji:   { fontSize: 36 },
   bottomSpacer: { height: spacing.xl },
 });
 
@@ -525,6 +550,17 @@ const icard = StyleSheet.create({
     flexDirection:  'row',
     justifyContent: 'space-between',
     alignItems:     'center',
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           4,
+  },
+  liveDot: {
+    width:           5,
+    height:          5,
+    borderRadius:    3,
+    backgroundColor: colors.green,
   },
 
   statsRow: {
@@ -561,13 +597,13 @@ const icard = StyleSheet.create({
 
 const statusStyle = StyleSheet.create({
   pill: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             5,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               5,
     paddingHorizontal: 9,
-    paddingVertical:  3,
-    borderRadius:    radius.full,
-    borderWidth:     1,
+    paddingVertical:   3,
+    borderRadius:      radius.full,
+    borderWidth:       1,
   },
   dot: {
     width:        6,

@@ -7,34 +7,22 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "20.19.4",
       "ios": {
         "simulator": true
-      },
-      "env": {
-        "YARN_IGNORE_ENGINES": "1"
       }
     },
     "preview": {
       "distribution": "internal",
-      "node": "20.19.4",
       "ios": {
         "simulator": false
       },
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "YARN_IGNORE_ENGINES": "1"
       }
     },
     "production": {
-      "node": "20.19.4",
       "android": {
         "buildType": "app-bundle"
-      },
-      "env": {
-        "YARN_IGNORE_ENGINES": "1"
       }
     }
   },

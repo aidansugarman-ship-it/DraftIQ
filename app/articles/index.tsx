@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { sleeper, SleeperPlayer } from '@services/sleeper';
+import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,130 +18,35 @@ import Animated, {
   withTiming,
   withDelay,
   Easing,
-  FadeIn,
 } from 'react-native-reanimated';
 import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type ArticleCategory = 'news' | 'analysis' | 'rankings' | 'strategy' | 'recap';
 type ImpactLevel     = 'high' | 'medium' | 'low';
 
 interface Article {
-  id:         string;
-  title:      string;
-  summary:    string;
-  category:   ArticleCategory;
-  impact:     ImpactLevel;
-  source:     string;
-  readTime:   number;
-  publishedAt: string;
-  relatedPlayers: string[];
-  aiTake?:    string;
-  featured?:  boolean;
+  id:              string;
+  title:           string;
+  summary:         string;
+  category:        ArticleCategory;
+  impact:          ImpactLevel;
+  source:          string;
+  readTime:        number;
+  publishedAt:     string;
+  relatedPlayers:  string[];
+  aiTake?:         string;
+  featured?:       boolean;
+  trendCount?:     number;
 }
 
-const MOCK_ARTICLES: Article[] = [
-  {
-    id: '1',
-    title: 'Derrick Henry Placed on IR: Justice Hill, Gus Edwards Step Up',
-    summary: 'The Ravens announced Henry will miss at least 3 weeks with a hamstring strain. OC Todd Monken confirmed a committee approach going forward, with Hill expected to handle third-down duties and Edwards taking early-down carries.',
-    category: 'news',
-    impact: 'high',
-    source: 'DraftIQ News',
-    readTime: 2,
-    publishedAt: '1h ago',
-    relatedPlayers: ['Derrick Henry', 'Justice Hill', 'Gus Edwards'],
-    aiTake: 'Immediate add on Hill and Edwards. Henry loses 3+ weeks of value.',
-    featured: true,
-  },
-  {
-    id: '2',
-    title: 'Christian Watson Season-Ending Hamstring: The Green Bay WR Fallout',
-    summary: 'Watson\'s IR designation reshapes the Packers\' receiving corps heading into the final stretch. Romeo Doubs is the primary beneficiary, with Jayden Reed also seeing increased targets. Love\'s 280 passing yards per game make this an attractive target share.',
-    category: 'analysis',
-    impact: 'high',
-    source: 'DraftIQ Analysis',
-    readTime: 3,
-    publishedAt: '3h ago',
-    relatedPlayers: ['Christian Watson', 'Romeo Doubs', 'Jayden Reed'],
-    aiTake: 'Doubs is a WR2 now. Add him if available — he\'s rostered in under 60% of leagues.',
-    featured: true,
-  },
-  {
-    id: '3',
-    title: 'Week 12 Waiver Wire: Top 10 Must-Add Players',
-    summary: 'We break down the most impactful waiver additions heading into Week 12 — from injured backfield handcuffs to emerging pass-game targets. Prioritized by league format.',
-    category: 'strategy',
-    impact: 'medium',
-    source: 'DraftIQ Wire',
-    readTime: 5,
-    publishedAt: '5h ago',
-    relatedPlayers: ['Tyjae Spears', 'Romeo Doubs', 'Jonnu Smith', 'Demario Douglas'],
-  },
-  {
-    id: '4',
-    title: 'Josh Allen\'s Rushing Attempts Drop: Scheme Change or Injury Caution?',
-    summary: 'Allen averaged 8.2 rush attempts over the first 6 weeks but has dropped to 5.1 over the last 3. OC Joe Brady confirmed it\'s intentional — preserving Allen for the playoffs. His passing volume remains elite, keeping him a QB1.',
-    category: 'analysis',
-    impact: 'medium',
-    source: 'DraftIQ Analysis',
-    readTime: 4,
-    publishedAt: '8h ago',
-    relatedPlayers: ['Josh Allen'],
-    aiTake: 'Rushing floor lowered but still QB1. Adjust expectations — he\'s passing his way to points now.',
-  },
-  {
-    id: '5',
-    title: 'Week 12 Rankings: Updated RB Tiers After Injury News',
-    summary: 'With Henry, Watson, and J.K. Dobbins all questionable or out, the RB landscape shifts significantly. Our updated tiers reflect handcuff values and streaming options.',
-    category: 'rankings',
-    impact: 'high',
-    source: 'DraftIQ Rankings',
-    readTime: 3,
-    publishedAt: '10h ago',
-    relatedPlayers: ['Derrick Henry', 'J.K. Dobbins', 'Gus Edwards', 'Justice Hill'],
-  },
-  {
-    id: '6',
-    title: 'Zero RB in 2024: Why the Strategy Is Working Again',
-    summary: 'After a down 2023 for Zero RB managers, the 2024 season\'s injury chaos has validated the approach. Teams that loaded up on WRs early are now winning the waiver wire.',
-    category: 'strategy',
-    impact: 'low',
-    source: 'DraftIQ Strategy',
-    readTime: 6,
-    publishedAt: '1d ago',
-    relatedPlayers: [],
-  },
-  {
-    id: '7',
-    title: 'Travis Kelce Targets Rebounding in Week 12 vs Soft Defense',
-    summary: 'After a quiet two weeks (9 targets combined), Kelce faces a Raiders defense allowing 82 yards/game to opposing TEs. Mahomes has also targeted Kelce on 28% of routes when single-covered over the last 10 games.',
-    category: 'analysis',
-    impact: 'medium',
-    source: 'DraftIQ Analysis',
-    readTime: 3,
-    publishedAt: '1d ago',
-    relatedPlayers: ['Travis Kelce', 'Patrick Mahomes'],
-    aiTake: 'Start Kelce with confidence. This matchup screams bounce-back week.',
-  },
-  {
-    id: '8',
-    title: 'Dynasty Outlook: Top Breakout Candidates for 2025',
-    summary: 'We identify 10 players who could leap into elite dynasty value next season based on contract situations, age curves, and offensive scheme trends.',
-    category: 'strategy',
-    impact: 'low',
-    source: 'DraftIQ Dynasty',
-    readTime: 8,
-    publishedAt: '2d ago',
-    relatedPlayers: ['Bijan Robinson', 'Puka Nacua', 'Tank Dell', 'Rashee Rice'],
-  },
-];
-
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const FANTASY_POS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
 
 const CATEGORY_COLORS: Record<ArticleCategory, string> = {
   news:     colors.coral,
@@ -163,6 +70,73 @@ const IMPACT_COLORS: Record<ImpactLevel, string> = {
   low:    colors.textTertiary,
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildArticlesFromTrending(
+  adds: { player_id: string; count: number }[],
+  drops: { player_id: string; count: number }[],
+  players: Record<string, SleeperPlayer>,
+): Article[] {
+  const addArticles: Article[] = adds
+    .filter(t => players[t.player_id] && FANTASY_POS.has(players[t.player_id].position))
+    .slice(0, 12)
+    .map((t, i): Article => {
+      const p    = players[t.player_id];
+      const name = p.full_name || `${p.first_name} ${p.last_name}`;
+      const hasInj = !!p.injury_status;
+      const trendLabel = t.count.toLocaleString();
+
+      const title = hasInj
+        ? `${name} (${p.injury_status}) driving ${trendLabel} adds in 24h`
+        : `${name} is the hottest waiver add — ${trendLabel} pickups today`;
+
+      const summary = [
+        `${name} (${p.position}, ${p.team || 'FA'}) is surging on waivers with ${trendLabel} adds in the last 24 hours.`,
+        hasInj ? `Current injury status: ${p.injury_status}.` : '',
+        p.injury_notes ? p.injury_notes : '',
+        !hasInj ? `A significant opportunity has likely opened up — check practice reports and beat reporters for context.` : '',
+      ].filter(Boolean).join(' ');
+
+      return {
+        id:             `add-${t.player_id}`,
+        title,
+        summary,
+        category:       hasInj ? 'news' : 'analysis',
+        impact:         t.count > 3000 ? 'high' : t.count > 1000 ? 'medium' : 'low',
+        source:         'Sleeper Live',
+        readTime:       1,
+        publishedAt:    'Live',
+        relatedPlayers: [name],
+        featured:       i < 2,
+        trendCount:     t.count,
+      };
+    });
+
+  const dropArticles: Article[] = drops
+    .filter(t => players[t.player_id] && FANTASY_POS.has(players[t.player_id].position))
+    .slice(0, 4)
+    .map((t): Article => {
+      const p    = players[t.player_id];
+      const name = p.full_name || `${p.first_name} ${p.last_name}`;
+      const hasInj = !!p.injury_status;
+
+      return {
+        id:             `drop-${t.player_id}`,
+        title:          `Managers dropping ${name} — ${t.count.toLocaleString()} drops today`,
+        summary:        `${name} (${p.position}, ${p.team || 'FA'}) is being cut in ${t.count.toLocaleString()} leagues in the last 24 hours. ${hasInj ? `Injury status: ${p.injury_status}.` : 'Value has likely dropped — check for a role change or matchup concerns.'}`,
+        category:       'news',
+        impact:         t.count > 2000 ? 'high' : 'medium',
+        source:         'Sleeper Live',
+        readTime:       1,
+        publishedAt:    'Live',
+        relatedPlayers: [name],
+        trendCount:     -t.count,
+      };
+    });
+
+  return [...addArticles, ...dropArticles];
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 type FilterTab = 'ALL' | ArticleCategory;
@@ -177,7 +151,18 @@ function CategoryBadge({ category }: { category: ArticleCategory }) {
 }
 
 function FeaturedCard({ article }: { article: Article }) {
-  const accentColor = CATEGORY_COLORS[article.category];
+  const accentColor               = CATEGORY_COLORS[article.category];
+  const [aiTake, setAiTake]       = useState(article.aiTake ?? '');
+  const [aiLoading, setAiLoading] = useState(!article.aiTake);
+
+  useEffect(() => {
+    if (article.aiTake) { setAiLoading(false); return; }
+    setAiLoading(true);
+    gemini.articleTake(article.title, 'NFL')
+      .then(setAiTake)
+      .catch(() => {})
+      .finally(() => setAiLoading(false));
+  }, [article.id]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -199,7 +184,17 @@ function FeaturedCard({ article }: { article: Article }) {
 
         <View style={feat.top}>
           <CategoryBadge category={article.category} />
-          <View style={[feat.impactDot, { backgroundColor: IMPACT_COLORS[article.impact] }]} />
+          <View style={feat.topRight}>
+            {article.trendCount && article.trendCount > 0 && (
+              <View style={feat.trendPill}>
+                <Ionicons name="trending-up" size={11} color={colors.green} />
+                <Text variant="caption" style={{ color: colors.green }}>
+                  +{article.trendCount.toLocaleString()}
+                </Text>
+              </View>
+            )}
+            <View style={[feat.impactDot, { backgroundColor: IMPACT_COLORS[article.impact] }]} />
+          </View>
         </View>
 
         <Text variant="bodyMedium" color={colors.textPrimary} style={feat.title}>
@@ -209,21 +204,25 @@ function FeaturedCard({ article }: { article: Article }) {
           {article.summary}
         </Text>
 
-        {article.aiTake && (
-          <View style={feat.aiTake}>
-            <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
-            <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 3 }}>
-              {article.aiTake}
-            </Text>
-          </View>
-        )}
+        {/* AI Take */}
+        <View style={feat.aiTake}>
+          <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
+          {aiLoading
+            ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: 6 }} />
+            : aiTake
+              ? <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 3 }}>{aiTake}</Text>
+              : null
+          }
+        </View>
 
         <View style={feat.footer}>
-          <Text variant="caption" color={colors.textTertiary}>{article.source}</Text>
+          <View style={feat.sourceRow}>
+            <View style={feat.liveDot} />
+            <Text variant="caption" color={colors.textTertiary}>{article.source}</Text>
+          </View>
           <View style={feat.footerRight}>
             <Ionicons name="time-outline" size={12} color={colors.textTertiary} />
-            <Text variant="caption" color={colors.textTertiary}>{article.readTime} min</Text>
-            <Text variant="caption" color={colors.textTertiary}>· {article.publishedAt}</Text>
+            <Text variant="caption" color={colors.textTertiary}>{article.readTime} min · {article.publishedAt}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -232,7 +231,22 @@ function FeaturedCard({ article }: { article: Article }) {
 }
 
 function ArticleRow({ article, index }: { article: Article; index: number }) {
-  const accentColor = CATEGORY_COLORS[article.category];
+  const accentColor               = CATEGORY_COLORS[article.category];
+  const [aiTake, setAiTake]       = useState(article.aiTake ?? '');
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    if (article.aiTake) return;
+    // lazy-load AI takes only for visible rows
+    const timer = setTimeout(() => {
+      setAiLoading(true);
+      gemini.articleTake(article.title, 'NFL')
+        .then(setAiTake)
+        .catch(() => {})
+        .finally(() => setAiLoading(false));
+    }, index * 300);
+    return () => clearTimeout(timer);
+  }, [article.id]);
 
   const op = useSharedValue(0);
   useEffect(() => {
@@ -252,17 +266,33 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
                 <Text variant="caption" style={{ color: colors.coral }}>⚡ HIGH IMPACT</Text>
               </View>
             )}
+            {article.trendCount && article.trendCount > 0 && (
+              <View style={arow.trendBadge}>
+                <Ionicons name="trending-up" size={10} color={colors.green} />
+                <Text variant="caption" style={{ color: colors.green }}>+{article.trendCount.toLocaleString()}</Text>
+              </View>
+            )}
+            {article.trendCount && article.trendCount < 0 && (
+              <View style={arow.trendDropBadge}>
+                <Ionicons name="trending-down" size={10} color={colors.coral} />
+                <Text variant="caption" style={{ color: colors.coral }}>{article.trendCount.toLocaleString()}</Text>
+              </View>
+            )}
           </View>
           <Text variant="bodyMedium" color={colors.textPrimary} style={{ lineHeight: 20 }}>
             {article.title}
           </Text>
-          {article.aiTake && (
-            <Text variant="bodySmall" color={colors.textTertiary} numberOfLines={2} style={{ lineHeight: 18 }}>
-              {article.aiTake}
-            </Text>
-          )}
+          {aiLoading
+            ? <ActivityIndicator size="small" color={colors.textTertiary} />
+            : aiTake
+              ? <Text variant="bodySmall" color={colors.textTertiary} numberOfLines={2} style={{ lineHeight: 18 }}>{aiTake}</Text>
+              : null
+          }
           <View style={arow.footer}>
-            <Text variant="caption" color={colors.textTertiary}>{article.source}</Text>
+            <View style={arow.sourceRow}>
+              <View style={arow.liveDot} />
+              <Text variant="caption" color={colors.textTertiary}>{article.source}</Text>
+            </View>
             <View style={arow.footerRight}>
               <Ionicons name="time-outline" size={11} color={colors.textTertiary} />
               <Text variant="caption" color={colors.textTertiary}>{article.readTime} min · {article.publishedAt}</Text>
@@ -277,7 +307,28 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ArticlesScreen() {
-  const [filter, setFilter] = useState<FilterTab>('ALL');
+  const [filter, setFilter]           = useState<FilterTab>('ALL');
+  const [articles, setArticles]       = useState<Article[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  const loadFeed = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const [adds, drops, players] = await Promise.all([
+        sleeper.getTrendingAdds(15),
+        sleeper.getTrendingDrops(5),
+        sleeper.getAllPlayers(),
+      ]);
+      const built = buildArticlesFromTrending(adds, drops, players);
+      setArticles(built);
+    } catch {
+      // keep empty
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadFeed(); }, [loadFeed]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -287,13 +338,9 @@ export default function ArticlesScreen() {
   }, []);
   const heroStyle = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
 
-  const featured   = MOCK_ARTICLES.filter(a => a.featured);
-  const nonFeatured = MOCK_ARTICLES.filter(a => !a.featured);
-
-  const filteredNon = nonFeatured.filter(a => {
-    if (filter === 'ALL') return true;
-    return a.category === filter;
-  });
+  const featured    = articles.filter(a => a.featured);
+  const nonFeatured = articles.filter(a => !a.featured);
+  const filteredNon = nonFeatured.filter(a => filter === 'ALL' || a.category === filter);
 
   const filterTabs: FilterTab[] = ['ALL', 'news', 'analysis', 'rankings', 'strategy'];
 
@@ -314,63 +361,85 @@ export default function ArticlesScreen() {
           {/* Hero */}
           <Animated.View style={heroStyle}>
             <Text style={styles.title}>THE{'\n'}FEED.</Text>
-            <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
-              Breaking news, AI analysis, rankings updates — everything that moves your roster.
-            </Text>
+            <View style={styles.subtitleRow}>
+              <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
+                Live trending players from Sleeper — who's being added, dropped, and why.
+              </Text>
+              <View style={styles.livePill}>
+                <View style={styles.liveDot} />
+                <Text variant="caption" style={{ color: colors.green }}>LIVE</Text>
+              </View>
+            </View>
           </Animated.View>
 
-          {/* Featured */}
-          {filter === 'ALL' && featured.length > 0 && (
-            <>
-              <Text variant="label" color={colors.textTertiary} style={styles.sectionLabel}>
-                BREAKING
-              </Text>
-              <View style={styles.featuredList}>
-                {featured.map(a => <FeaturedCard key={a.id} article={a} />)}
-              </View>
-            </>
-          )}
-
-          {/* Filter tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-            {filterTabs.map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.filterTab, filter === tab && styles.filterTabActive]}
-                onPress={() => setFilter(tab)}
-                activeOpacity={0.7}
-              >
-                {tab !== 'ALL' && (
-                  <View style={[styles.filterDot, { backgroundColor: CATEGORY_COLORS[tab as ArticleCategory] }]} />
-                )}
-                <Text
-                  variant="labelSmall"
-                  style={{ color: filter === tab ? colors.textPrimary : colors.textTertiary, letterSpacing: 0.5 }}
-                >
-                  {tab === 'ALL' ? 'ALL' : CATEGORY_LABELS[tab as ArticleCategory]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Article list */}
-          <Text variant="label" color={colors.textTertiary} style={styles.sectionLabel}>
-            {filter === 'ALL' ? 'LATEST' : CATEGORY_LABELS[filter as ArticleCategory]}
-          </Text>
-
-          <View style={styles.articleList}>
-            {filteredNon.map((a, i) => (
-              <ArticleRow key={a.id} article={a} index={i} />
-            ))}
-          </View>
-
-          {filteredNon.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>📰</Text>
-              <Text variant="body" color={colors.textSecondary} align="center">
-                No articles in this category yet.
+          {dataLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={colors.green} />
+              <Text variant="bodySmall" color={colors.textTertiary} style={{ marginTop: spacing.md }}>
+                Fetching live Sleeper trends…
               </Text>
             </View>
+          ) : (
+            <>
+              {/* Featured */}
+              {filter === 'ALL' && featured.length > 0 && (
+                <>
+                  <Text variant="label" color={colors.textTertiary} style={styles.sectionLabel}>
+                    BREAKING
+                  </Text>
+                  <View style={styles.featuredList}>
+                    {featured.map(a => <FeaturedCard key={a.id} article={a} />)}
+                  </View>
+                </>
+              )}
+
+              {/* Filter tabs */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterScroll}
+                contentContainerStyle={styles.filterContent}
+              >
+                {filterTabs.map(tab => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.filterTab, filter === tab && styles.filterTabActive]}
+                    onPress={() => setFilter(tab)}
+                    activeOpacity={0.7}
+                  >
+                    {tab !== 'ALL' && (
+                      <View style={[styles.filterDot, { backgroundColor: CATEGORY_COLORS[tab as ArticleCategory] }]} />
+                    )}
+                    <Text
+                      variant="labelSmall"
+                      style={{ color: filter === tab ? colors.textPrimary : colors.textTertiary, letterSpacing: 0.5 }}
+                    >
+                      {tab === 'ALL' ? 'ALL' : CATEGORY_LABELS[tab as ArticleCategory]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Article list */}
+              <Text variant="label" color={colors.textTertiary} style={styles.sectionLabel}>
+                {filter === 'ALL' ? 'LATEST' : CATEGORY_LABELS[filter as ArticleCategory]}
+              </Text>
+
+              {filteredNon.length > 0 ? (
+                <View style={styles.articleList}>
+                  {filteredNon.map((a, i) => (
+                    <ArticleRow key={a.id} article={a} index={i} />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyEmoji}>📰</Text>
+                  <Text variant="body" color={colors.textSecondary} align="center">
+                    No articles in this category yet.
+                  </Text>
+                </View>
+              )}
+            </>
           )}
 
           <View style={styles.bottomSpacer} />
@@ -391,23 +460,23 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
     paddingHorizontal: spacing.base,
     paddingVertical:   spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width:          36,
-    height:         36,
-    borderRadius:   radius.sm,
+    width:           36,
+    height:          36,
+    borderRadius:    radius.sm,
     backgroundColor: colors.surface,
-    borderWidth:    1,
-    borderColor:    colors.border,
-    alignItems:     'center',
-    justifyContent: 'center',
+    borderWidth:     1,
+    borderColor:     colors.border,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
 
   title: {
@@ -418,9 +487,38 @@ const styles = StyleSheet.create({
     marginTop:    spacing.xl,
     marginBottom: spacing.sm,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    gap:           spacing.md,
+    marginBottom:  spacing.xl,
+  },
   subtitle: {
-    lineHeight:   22,
-    marginBottom: spacing.xl,
+    flex:       1,
+    lineHeight: 22,
+  },
+  livePill: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               5,
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderRadius:      radius.full,
+    backgroundColor:   `${colors.green}12`,
+    borderWidth:       1,
+    borderColor:       `${colors.green}30`,
+    marginTop:         2,
+  },
+  liveDot: {
+    width:           6,
+    height:          6,
+    borderRadius:    3,
+    backgroundColor: colors.green,
+  },
+
+  loadingBox: {
+    alignItems: 'center',
+    paddingTop: spacing['2xl'],
   },
 
   sectionLabel: {
@@ -433,15 +531,15 @@ const styles = StyleSheet.create({
   filterScroll:  { marginBottom: spacing.xl },
   filterContent: { paddingRight: spacing.base, gap: spacing.sm, flexDirection: 'row' },
   filterTab: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             spacing.xs,
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical:   7,
-    borderRadius:    radius.full,
-    backgroundColor: colors.surface,
-    borderWidth:     1,
-    borderColor:     colors.border,
+    borderRadius:      radius.full,
+    backgroundColor:   colors.surface,
+    borderWidth:       1,
+    borderColor:       colors.border,
   },
   filterTabActive: {
     backgroundColor: colors.surfaceElevated,
@@ -466,7 +564,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing['2xl'],
     gap:        spacing.md,
   },
-  emptyEmoji: { fontSize: 36 },
+  emptyEmoji:   { fontSize: 36 },
   bottomSpacer: { height: spacing.xl },
 });
 
@@ -482,19 +580,29 @@ const feat = StyleSheet.create({
   top: {
     flexDirection: 'row',
     alignItems:    'center',
+    justifyContent: 'space-between',
+  },
+  topRight: {
+    flexDirection: 'row',
+    alignItems:    'center',
     gap:           spacing.sm,
+  },
+  trendPill: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               3,
+    paddingHorizontal: 7,
+    paddingVertical:   2,
+    borderRadius:      radius.full,
+    backgroundColor:   `${colors.green}15`,
   },
   impactDot: {
     width:        8,
     height:       8,
     borderRadius: 4,
   },
-  title: {
-    lineHeight: 22,
-  },
-  summary: {
-    lineHeight: 20,
-  },
+  title:   { lineHeight: 22 },
+  summary: { lineHeight: 20 },
   aiTake: {
     backgroundColor: `${colors.green}0A`,
     borderWidth:     1,
@@ -507,6 +615,17 @@ const feat = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems:     'center',
   },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+  },
+  liveDot: {
+    width:           5,
+    height:          5,
+    borderRadius:    3,
+    backgroundColor: colors.green,
+  },
   footerRight: {
     flexDirection: 'row',
     alignItems:    'center',
@@ -516,12 +635,12 @@ const feat = StyleSheet.create({
 
 const arow = StyleSheet.create({
   wrap: {
-    flexDirection:    'row',
+    flexDirection:     'row',
     paddingHorizontal: spacing.base,
     paddingVertical:   spacing.base,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
-    gap:              spacing.md,
+    gap:               spacing.md,
   },
   accent: {
     width:        3,
@@ -531,6 +650,7 @@ const arow = StyleSheet.create({
   top: {
     flexDirection: 'row',
     alignItems:    'center',
+    flexWrap:      'wrap',
     gap:           spacing.sm,
   },
   impactBadge: {
@@ -539,10 +659,39 @@ const arow = StyleSheet.create({
     borderRadius:      radius.sm,
     backgroundColor:   `${colors.coral}15`,
   },
+  trendBadge: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               3,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    borderRadius:      radius.sm,
+    backgroundColor:   `${colors.green}15`,
+  },
+  trendDropBadge: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               3,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+    borderRadius:      radius.sm,
+    backgroundColor:   `${colors.coral}15`,
+  },
   footer: {
     flexDirection:  'row',
     justifyContent: 'space-between',
     alignItems:     'center',
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+  },
+  liveDot: {
+    width:           5,
+    height:          5,
+    borderRadius:    3,
+    backgroundColor: colors.green,
   },
   footerRight: {
     flexDirection: 'row',

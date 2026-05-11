@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { sleeper, SleeperPlayer } from '@services/sleeper';
 import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,158 +18,38 @@ import Animated, {
   withTiming,
   withDelay,
   Easing,
-  FadeIn,
 } from 'react-native-reanimated';
 import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
-import { canAccess } from '@constants/tiers';
-import { useUserStore } from '@store/useUserStore';
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type Action = 'add' | 'drop' | 'stream';
+type Action   = 'add' | 'drop' | 'stream';
 type Priority = 'high' | 'medium' | 'low';
-type Pos = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
+type Pos      = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
 
 interface WaiverTarget {
-  id:         string;
-  name:       string;
-  team:       string;
-  pos:        Pos;
-  owned:      number;    // % owned
-  trend:      number;    // +/- adds this week
-  score:      number;
-  action:     Action;
-  priority:   Priority;
-  reason:     string;
-  aiTake:     string;
-  dropsFor?:  string;    // suggested drop pairing
-  byeWeek:    number;
-  injury?:    string;
+  id:        string;
+  name:      string;
+  team:      string;
+  pos:       Pos;
+  owned:     number;
+  trend:     number;
+  score:     number;
+  action:    Action;
+  priority:  Priority;
+  reason:    string;
+  aiTake:    string;
+  dropsFor?: string;
+  byeWeek:   number;
+  injury?:   string;
 }
 
-const MOCK_WAIVER: WaiverTarget[] = [
-  {
-    id: '1',
-    name: 'Tyjae Spears',
-    team: 'TEN',
-    pos: 'RB',
-    owned: 38,
-    trend: +1840,
-    score: 72,
-    action: 'add',
-    priority: 'high',
-    reason: 'Derrick Henry out 2–3 weeks. Spears becomes the lead back.',
-    aiTake: 'Immediate RB2 value. Start in all formats this week.',
-    dropsFor: 'Cam Akers',
-    byeWeek: 6,
-  },
-  {
-    id: '2',
-    name: 'Romeo Doubs',
-    team: 'GB',
-    pos: 'WR',
-    owned: 52,
-    trend: +620,
-    score: 68,
-    action: 'add',
-    priority: 'high',
-    reason: 'Christian Watson on IR. Doubs is now the WR1 target share in GB.',
-    aiTake: 'WR2 upside with Love targeting him 8+ times per game.',
-    dropsFor: 'Tyler Boyd',
-    byeWeek: 6,
-  },
-  {
-    id: '3',
-    name: 'Jonnu Smith',
-    team: 'MIA',
-    pos: 'TE',
-    owned: 14,
-    trend: +980,
-    score: 64,
-    action: 'add',
-    priority: 'medium',
-    reason: 'Durham Smythe injured. Smith step into TE1 role in Tua\'s offense.',
-    aiTake: 'Streamer with upside. MIA faces a soft TE matchup this week.',
-    dropsFor: 'Irv Smith Jr.',
-    byeWeek: 10,
-  },
-  {
-    id: '4',
-    name: 'Elijah Moore',
-    team: 'CLE',
-    pos: 'WR',
-    owned: 22,
-    trend: +410,
-    score: 59,
-    action: 'stream',
-    priority: 'medium',
-    reason: 'Faces league-worst pass defense. CLE projects for 35+ pass attempts.',
-    aiTake: 'One-week streamer only. Sell after favorable matchup.',
-    byeWeek: 5,
-  },
-  {
-    id: '5',
-    name: 'Gus Edwards',
-    team: 'LAC',
-    pos: 'RB',
-    owned: 61,
-    trend: +210,
-    score: 66,
-    action: 'add',
-    priority: 'medium',
-    reason: 'J.K. Dobbins listed doubtful. Edwards likely to see 15+ touches.',
-    aiTake: 'Solid handcuff with standalone value if Dobbins misses.',
-    dropsFor: 'Boston Scott',
-    byeWeek: 5,
-  },
-  {
-    id: '6',
-    name: 'Demario Douglas',
-    team: 'NE',
-    pos: 'WR',
-    owned: 9,
-    trend: +1200,
-    score: 61,
-    action: 'add',
-    priority: 'low',
-    reason: 'Racking up slot targets in NE. JuJu Smith-Schuster lost for season.',
-    aiTake: 'Deep league add. Volume-based upside only.',
-    byeWeek: 14,
-  },
-  {
-    id: '7',
-    name: 'Cam Akers',
-    team: 'MIN',
-    pos: 'RB',
-    owned: 48,
-    trend: -680,
-    score: 40,
-    action: 'drop',
-    priority: 'high',
-    reason: 'Aaron Jones is fully healthy. Akers is now in a timeshare with 0 upside.',
-    aiTake: 'Drop him. His window as a starter has closed.',
-    byeWeek: 6,
-  },
-  {
-    id: '8',
-    name: 'Tyler Boyd',
-    team: 'CIN',
-    pos: 'WR',
-    owned: 55,
-    trend: -320,
-    score: 45,
-    action: 'drop',
-    priority: 'medium',
-    reason: 'Tee Higgins returned healthy. Boyd back to 4th in CIN target pecking order.',
-    aiTake: 'Replaceable by waiver adds with better upside.',
-    byeWeek: 7,
-  },
-];
-
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const FANTASY_POS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
 
 const ACTION_COLORS: Record<Action, string> = {
   add:    colors.green,
@@ -198,6 +78,95 @@ const POS_COLORS: Record<Pos, string> = {
   DEF: colors.purple,
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function estimateOwnership(rank: number | null): number {
+  if (!rank) return 5;
+  if (rank < 10)  return 96;
+  if (rank < 30)  return 88;
+  if (rank < 75)  return 72;
+  if (rank < 150) return 54;
+  if (rank < 300) return 30;
+  return 12;
+}
+
+function trendToScore(count: number): number {
+  if (count > 10000) return 95;
+  if (count > 5000)  return 88;
+  if (count > 2000)  return 80;
+  if (count > 1000)  return 72;
+  if (count > 500)   return 64;
+  return 55;
+}
+
+function safePos(pos: string): Pos {
+  return (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos) ? pos : 'WR') as Pos;
+}
+
+function buildReason(p: SleeperPlayer, count: number, action: 'add' | 'drop'): string {
+  if (p.injury_notes) return p.injury_notes;
+  if (p.injury_status) {
+    const word = action === 'add' ? 'adds' : 'drops';
+    return `${p.injury_status} — ${count.toLocaleString()} ${word} in 24h after injury news.`;
+  }
+  const word = action === 'add' ? 'adds' : 'drops';
+  return `Trending with ${count.toLocaleString()} ${word} in the last 24 hours.`;
+}
+
+function buildTargets(
+  adds: { player_id: string; count: number }[],
+  drops: { player_id: string; count: number }[],
+  players: Record<string, SleeperPlayer>,
+): WaiverTarget[] {
+  const addTargets: WaiverTarget[] = adds
+    .filter(t => players[t.player_id] && FANTASY_POS.has(players[t.player_id].position))
+    .slice(0, 12)
+    .map((t, i): WaiverTarget => {
+      const p = players[t.player_id];
+      const name = p.full_name || `${p.first_name} ${p.last_name}`;
+      return {
+        id:       t.player_id,
+        name,
+        team:     p.team || 'FA',
+        pos:      safePos(p.position),
+        owned:    estimateOwnership(p.search_rank),
+        trend:    t.count,
+        score:    trendToScore(t.count),
+        action:   'add',
+        priority: i < 3 ? 'high' : i < 7 ? 'medium' : 'low',
+        reason:   buildReason(p, t.count, 'add'),
+        aiTake:   '',
+        byeWeek:  0,
+        injury:   p.injury_status ?? undefined,
+      };
+    });
+
+  const dropTargets: WaiverTarget[] = drops
+    .filter(t => players[t.player_id] && FANTASY_POS.has(players[t.player_id].position))
+    .slice(0, 5)
+    .map((t, i): WaiverTarget => {
+      const p = players[t.player_id];
+      const name = p.full_name || `${p.first_name} ${p.last_name}`;
+      return {
+        id:       `drop-${t.player_id}`,
+        name,
+        team:     p.team || 'FA',
+        pos:      safePos(p.position),
+        owned:    estimateOwnership(p.search_rank),
+        trend:    -t.count,
+        score:    Math.max(10, 55 - Math.floor(t.count / 200)),
+        action:   'drop',
+        priority: i === 0 ? 'high' : 'medium',
+        reason:   buildReason(p, t.count, 'drop'),
+        aiTake:   '',
+        byeWeek:  0,
+        injury:   p.injury_status ?? undefined,
+      };
+    });
+
+  return [...addTargets, ...dropTargets];
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 type FilterTab = 'ALL' | 'ADD' | 'DROP' | 'STREAM';
@@ -214,7 +183,7 @@ function TrendArrow({ trend }: { trend: number }) {
   if (trend === 0) return null;
   const up    = trend > 0;
   const color = up ? colors.green : colors.coral;
-  const label = up ? `+${trend.toLocaleString()}` : trend.toLocaleString();
+  const label = up ? `+${Math.abs(trend).toLocaleString()}` : `-${Math.abs(trend).toLocaleString()}`;
   return (
     <View style={trend_.wrap}>
       <Ionicons name={up ? 'trending-up' : 'trending-down'} size={12} color={color} />
@@ -225,7 +194,7 @@ function TrendArrow({ trend }: { trend: number }) {
 
 function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) {
   const accentColor = ACTION_COLORS[target.action];
-  const [aiTake, setAiTake] = useState(target.aiTake);
+  const [aiTake, setAiTake]     = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
@@ -281,7 +250,7 @@ function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) 
               <Text variant="bodyMedium" color={colors.textPrimary}>{target.name}</Text>
             </View>
             <View style={card.metaRow}>
-              <Text variant="caption" color={colors.textTertiary}>{target.team} · Bye {target.byeWeek}</Text>
+              <Text variant="caption" color={colors.textTertiary}>{target.team}</Text>
               {target.injury && (
                 <View style={card.injuryTag}>
                   <Text variant="caption" style={{ color: colors.coral }}>⚠ {target.injury}</Text>
@@ -300,14 +269,18 @@ function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) 
           {target.reason}
         </Text>
 
-        {/* AI Take */}
-        <View style={card.aiTake}>
-          <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
-          {aiLoading
-            ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: 6 }} />
-            : <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>{aiTake}</Text>
-          }
-        </View>
+        {/* AI Take — only for adds */}
+        {target.action === 'add' && (
+          <View style={card.aiTake}>
+            <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8 }}>AI TAKE</Text>
+            {aiLoading
+              ? <ActivityIndicator size="small" color={colors.green} style={{ marginTop: 6 }} />
+              : aiTake
+                ? <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>{aiTake}</Text>
+                : null
+            }
+          </View>
+        )}
 
         {/* Drop suggestion */}
         {target.dropsFor && target.action === 'add' && (
@@ -326,8 +299,28 @@ function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function AddDropScreen() {
-  const tier = useUserStore(s => s.tier);
-  const [filter, setFilter] = useState<FilterTab>('ALL');
+  const [filter, setFilter]           = useState<FilterTab>('ALL');
+  const [waiverTargets, setTargets]   = useState<WaiverTarget[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const [adds, drops, players] = await Promise.all([
+        sleeper.getTrendingAdds(20),
+        sleeper.getTrendingDrops(8),
+        sleeper.getAllPlayers(),
+      ]);
+      const targets = buildTargets(adds, drops, players);
+      setTargets(targets);
+    } catch {
+      // keep empty, show fallback
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -337,12 +330,11 @@ export default function AddDropScreen() {
   }, []);
   const heroStyle = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
 
-  const filtered = MOCK_WAIVER.filter(t => {
-    if (filter === 'ALL') return true;
-    return t.action.toUpperCase() === filter;
-  });
-
-  const highCount = MOCK_WAIVER.filter(t => t.priority === 'high').length;
+  const filtered   = waiverTargets.filter(t => filter === 'ALL' || t.action.toUpperCase() === filter);
+  const highCount  = waiverTargets.filter(t => t.priority === 'high').length;
+  const addCount   = waiverTargets.filter(t => t.action === 'add').length;
+  const dropCount  = waiverTargets.filter(t => t.action === 'drop').length;
+  const streamCount = waiverTargets.filter(t => t.action === 'stream').length;
 
   return (
     <View style={styles.container}>
@@ -353,7 +345,7 @@ export default function AddDropScreen() {
             <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text variant="bodyMedium" color={colors.textPrimary}>Add/Drop Advisor</Text>
-          <View style={[styles.alertBadge]}>
+          <View style={styles.alertBadge}>
             <Text variant="labelSmall" style={{ color: colors.coral }}>{highCount}</Text>
           </View>
         </View>
@@ -363,20 +355,29 @@ export default function AddDropScreen() {
           {/* Hero */}
           <Animated.View style={heroStyle}>
             <Text style={styles.title}>WAIVER{'\n'}WIRE.</Text>
-            <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
-              AI-ranked adds, drops, and streamers — updated every Tuesday morning.
-            </Text>
+            <View style={styles.subtitleRow}>
+              <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
+                Live trending players from Sleeper — AI-ranked adds, drops, and streamers.
+              </Text>
+              <View style={styles.livePill}>
+                <View style={styles.liveDot} />
+                <Text variant="caption" style={{ color: colors.green }}>LIVE</Text>
+              </View>
+            </View>
           </Animated.View>
 
           {/* Summary pills */}
           <Animated.View style={[styles.summaryRow, heroStyle]}>
             {[
-              { label: 'ADDS',    count: MOCK_WAIVER.filter(t => t.action === 'add').length,    color: colors.green },
-              { label: 'DROPS',   count: MOCK_WAIVER.filter(t => t.action === 'drop').length,   color: colors.coral },
-              { label: 'STREAMS', count: MOCK_WAIVER.filter(t => t.action === 'stream').length, color: colors.gold },
+              { label: 'ADDS',    count: addCount,    color: colors.green },
+              { label: 'DROPS',   count: dropCount,   color: colors.coral },
+              { label: 'STREAMS', count: streamCount, color: colors.gold },
             ].map(s => (
               <View key={s.label} style={[styles.summaryPill, { borderColor: `${s.color}30`, backgroundColor: `${s.color}0C` }]}>
-                <Text variant="h3" style={{ color: s.color }}>{s.count}</Text>
+                {dataLoading
+                  ? <ActivityIndicator size="small" color={s.color} />
+                  : <Text variant="h3" style={{ color: s.color }}>{s.count}</Text>
+                }
                 <Text variant="caption" color={colors.textTertiary} style={{ letterSpacing: 0.8 }}>{s.label}</Text>
               </View>
             ))}
@@ -402,15 +403,22 @@ export default function AddDropScreen() {
           </View>
 
           {/* Cards */}
-          {filtered.map((target, i) => (
-            <WaiverCard key={target.id} target={target} index={i} />
-          ))}
-
-          {filtered.length === 0 && (
+          {dataLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={colors.green} />
+              <Text variant="bodySmall" color={colors.textTertiary} style={{ marginTop: spacing.md }}>
+                Fetching live Sleeper data…
+              </Text>
+            </View>
+          ) : filtered.length > 0 ? (
+            filtered.map((target, i) => (
+              <WaiverCard key={target.id} target={target} index={i} />
+            ))
+          ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>🔍</Text>
               <Text variant="body" color={colors.textSecondary} align="center">
-                No {filter.toLowerCase()} recommendations this week.
+                No {filter.toLowerCase()} recommendations right now.
               </Text>
             </View>
           )}
@@ -433,23 +441,23 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
     paddingHorizontal: spacing.base,
     paddingVertical:   spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width:          36,
-    height:         36,
-    borderRadius:   radius.sm,
+    width:           36,
+    height:          36,
+    borderRadius:    radius.sm,
     backgroundColor: colors.surface,
-    borderWidth:    1,
-    borderColor:    colors.border,
-    alignItems:     'center',
-    justifyContent: 'center',
+    borderWidth:     1,
+    borderColor:     colors.border,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   alertBadge: {
     width:           28,
@@ -470,29 +478,53 @@ const styles = StyleSheet.create({
     marginTop:    spacing.xl,
     marginBottom: spacing.sm,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    gap:           spacing.md,
+    marginBottom:  spacing.xl,
+  },
   subtitle: {
-    lineHeight:   22,
-    marginBottom: spacing.xl,
+    flex:       1,
+    lineHeight: 22,
+  },
+  livePill: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             5,
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderRadius:    radius.full,
+    backgroundColor: `${colors.green}12`,
+    borderWidth:     1,
+    borderColor:     `${colors.green}30`,
+    marginTop:       2,
+  },
+  liveDot: {
+    width:        6,
+    height:       6,
+    borderRadius: 3,
+    backgroundColor: colors.green,
   },
 
   summaryRow: {
-    flexDirection:  'row',
-    gap:            spacing.md,
-    marginBottom:   spacing.xl,
+    flexDirection: 'row',
+    gap:           spacing.md,
+    marginBottom:  spacing.xl,
   },
   summaryPill: {
-    flex:           1,
-    alignItems:     'center',
-    borderWidth:    1,
-    borderRadius:   radius.lg,
+    flex:            1,
+    alignItems:      'center',
+    borderWidth:     1,
+    borderRadius:    radius.lg,
     paddingVertical: spacing.md,
-    gap:            4,
+    gap:             4,
   },
 
   filterRow: {
-    flexDirection:  'row',
-    gap:            spacing.sm,
-    marginBottom:   spacing.lg,
+    flexDirection: 'row',
+    gap:           spacing.sm,
+    marginBottom:  spacing.lg,
   },
   filterTab: {
     flex:            1,
@@ -508,13 +540,16 @@ const styles = StyleSheet.create({
     borderColor:     colors.textTertiary,
   },
 
-  emptyState: {
-    alignItems:   'center',
-    paddingTop:   spacing['2xl'],
-    gap:          spacing.md,
+  loadingBox: {
+    alignItems: 'center',
+    paddingTop: spacing['2xl'],
   },
-  emptyEmoji: { fontSize: 36 },
-
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: spacing['2xl'],
+    gap:        spacing.md,
+  },
+  emptyEmoji:   { fontSize: 36 },
   bottomSpacer: { height: spacing.xl },
 });
 
@@ -581,9 +616,7 @@ const card = StyleSheet.create({
     gap:        4,
   },
 
-  reason: {
-    lineHeight: 18,
-  },
+  reason: { lineHeight: 18 },
   aiTake: {
     backgroundColor: `${colors.green}0A`,
     borderWidth:     1,
