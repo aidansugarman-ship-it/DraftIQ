@@ -67,6 +67,10 @@ function withXcode26Fixes(config) {
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      existing = config.build_settings['HEADER_SEARCH_PATHS'] || '$(inherited)'
+      unless existing.include?('ReactCommon')
+        config.build_settings['HEADER_SEARCH_PATHS'] = existing + ' "$(PODS_ROOT)/../../node_modules/react-native/ReactCommon" "$(PODS_ROOT)/../../node_modules/react-native/ReactCommon/react/renderer/graphics/platform/ios"'
+      end
     end
   end
 
