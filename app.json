@@ -14,7 +14,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0D0D0F"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.draftiq.app",
@@ -22,7 +24,8 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "DraftIQ uses your camera to update your profile photo.",
-        "NSPhotoLibraryUsageDescription": "DraftIQ saves your draft recap share cards to your photo library."
+        "NSPhotoLibraryUsageDescription": "DraftIQ saves your draft recap share cards to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

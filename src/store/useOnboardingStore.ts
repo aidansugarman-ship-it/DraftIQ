@@ -8,6 +8,7 @@ import type { TeamArchetype, DraftPositionCategory, DraftFormat } from '../types
 interface OnboardingState {
   preferredSports:        SportId[];
   primarySport:           SportId;
+  experienceLevel:        'beginner' | 'experienced' | null;
   scoringType:            ScoringTypeId | null;
   numTeams:               number;
   format:                 DraftFormat;
@@ -17,6 +18,7 @@ interface OnboardingState {
   draftPositionNumber:    number;
 
   setPreferredSports:     (sports: SportId[]) => void;
+  setExperienceLevel:     (level: 'beginner' | 'experienced') => void;
   setScoringType:         (t: ScoringTypeId) => void;
   setNumTeams:            (n: number) => void;
   setFormat:              (f: DraftFormat) => void;
@@ -27,9 +29,10 @@ interface OnboardingState {
   reset:                  () => void;
 }
 
-const INITIAL: Omit<OnboardingState, 'setPreferredSports' | 'setScoringType' | 'setNumTeams' | 'setFormat' | 'setIsDynasty' | 'setArchetype' | 'setDraftPosition' | 'commit' | 'reset'> = {
+const INITIAL: Omit<OnboardingState, 'setPreferredSports' | 'setExperienceLevel' | 'setScoringType' | 'setNumTeams' | 'setFormat' | 'setIsDynasty' | 'setArchetype' | 'setDraftPosition' | 'commit' | 'reset'> = {
   preferredSports:       [],
   primarySport:          'nfl',
+  experienceLevel:       null,
   scoringType:           null,
   numTeams:              12,
   format:                'snake',
@@ -46,6 +49,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     preferredSports: sports,
     primarySport:    sports[0] ?? 'nfl',
   }),
+  setExperienceLevel: (experienceLevel) => set({ experienceLevel }),
   setScoringType:   (scoringType) => set({ scoringType }),
   setNumTeams:      (numTeams) => set({ numTeams }),
   setFormat:        (format) => set({ format }),
@@ -65,6 +69,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
       onboardingComplete: true,
       primarySport:       s.primarySport,
       preferredSports:    s.preferredSports,
+      experienceLevel:    s.experienceLevel ?? 'experienced',
       archetype:          s.archetype ?? 'balanced',
       leagueSettings: {
         sport:                  s.primarySport,

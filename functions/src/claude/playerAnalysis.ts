@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaude } from '../utils/claudeClient';
 import { getCachedField, setCachedField, hashString } from '../utils/firestoreCache';
 
@@ -20,7 +20,7 @@ Never use bullet points. Write in full paragraphs with a distinct voice.
 Be specific — name actual injuries, schemes, coaches, situations. No generic advice.`;
 
 export const getPlayerAnalysis = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: PlayerAnalysisRequest) => {
     const newsHash = hashString(data.recentNews.join('|'));
 
@@ -58,7 +58,7 @@ Each paragraph should be 3–4 sentences. Sound like an analyst who watches ever
   });
 
 export const getBackgroundStory = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: PlayerAnalysisRequest) => {
     const newsHash = hashString(data.playerName + data.team + data.sport);
 

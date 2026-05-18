@@ -1,19 +1,17 @@
 import { Tabs } from 'expo-router';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Text as RNText } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { colors } from '@constants/colors';
-import { typography } from '@constants/typography';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-interface TabIconProps {
+interface IconTabProps {
   name:     IoniconName;
   focused:  boolean;
-  label:    string;
 }
 
-function TabIcon({ name, focused, label }: TabIconProps) {
+function IconTab({ name, focused }: IconTabProps) {
   return (
     <View style={[tabStyles.wrap, focused && tabStyles.wrapActive]}>
       <Ionicons
@@ -21,6 +19,14 @@ function TabIcon({ name, focused, label }: TabIconProps) {
         size={22}
         color={focused ? colors.green : colors.textTertiary}
       />
+    </View>
+  );
+}
+
+function EmojiTab({ emoji, focused }: { emoji: string; focused: boolean }) {
+  return (
+    <View style={[tabStyles.wrap, focused && tabStyles.wrapActive]}>
+      <RNText style={[tabStyles.emoji, !focused && { opacity: 0.55 }]}>{emoji}</RNText>
     </View>
   );
 }
@@ -48,34 +54,31 @@ export default function TabsLayout() {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} label="Home" />
+            <IconTab name={focused ? 'home' : 'home-outline'} focused={focused} />
           ),
         }}
       />
       <Tabs.Screen
-        name="board"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'list' : 'list-outline'} focused={focused} label="Board" />
-          ),
-        }}
+        name="nfl"
+        options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="🏈" focused={focused} /> }}
       />
       <Tabs.Screen
-        name="draft"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'flash' : 'flash-outline'} focused={focused} label="Draft" />
-          ),
-        }}
+        name="nba"
+        options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="🏀" focused={focused} /> }}
       />
       <Tabs.Screen
-        name="profile"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} label="Profile" />
-          ),
-        }}
+        name="mlb"
+        options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="⚾" focused={focused} /> }}
       />
+      <Tabs.Screen
+        name="nhl"
+        options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="🏒" focused={focused} /> }}
+      />
+
+      {/* Hidden from tab bar but routes still work */}
+      <Tabs.Screen name="board"   options={{ href: null }} />
+      <Tabs.Screen name="draft"   options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -101,5 +104,9 @@ const tabStyles = StyleSheet.create({
   },
   wrapActive: {
     backgroundColor: 'rgba(0,255,135,0.1)',
+  },
+  emoji: {
+    fontSize:   22,
+    lineHeight: 28,
   },
 });

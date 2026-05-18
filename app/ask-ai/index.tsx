@@ -17,19 +17,44 @@ import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { gemini } from '@services/gemini';
+import { useUserStore } from '@store/useUserStore';
+import { SPORTS } from '@constants/sports';
 
 type Message = { role: 'user' | 'ai'; text: string };
+type SportKey = 'nfl' | 'nba' | 'mlb' | 'nhl';
 
-const SUGGESTED = [
-  'Should I start Derrick Henry this week?',
-  'Is this trade fair: Davante Adams for CeeDee Lamb?',
-  'Who are the best waiver pickups right now?',
-  'Grade my draft: McCaffrey, Hill, Kelce, Jefferson, Pollard',
-];
+const SUGGESTED: Record<SportKey, string[]> = {
+  nfl: [
+    'Should I start Derrick Henry this week?',
+    'Is Davante Adams for CeeDee Lamb a fair trade?',
+    'Who are the best waiver pickups right now?',
+    'Is Bijan Robinson a sell-high candidate?',
+  ],
+  nba: [
+    'Should I start Tyrese Maxey tonight?',
+    'Who are the top NBA waiver pickups this week?',
+    'Is LeBron a buy-low right now?',
+    'Best punt FT% targets in 9-cat?',
+  ],
+  mlb: [
+    'Who are the hottest MLB streaming SP options?',
+    'Should I drop a slumping vet for a hot rookie?',
+    'Best buy-low hitters with bad BABIP luck?',
+    'Closer situations to monitor this week?',
+  ],
+  nhl: [
+    'Best NHL waiver pickups this week?',
+    'Who are the hottest goaltenders right now?',
+    'Should I trade for a player with cold xG luck?',
+    'Power-play upside guys to target?',
+  ],
+};
 
 export default function AskAIScreen() {
+  const currentSport = useUserStore((s) => s.currentSport);
+  const sportLabel   = SPORTS[currentSport].shortLabel;
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', text: "What's your fantasy question? I'll give you the sharpest take possible." },
+    { role: 'ai', text: `Ask me anything about ${sportLabel} fantasy. Start/sit, trades, waivers, draft strategy — I'll give you the sharpest take.` },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,7 +69,7 @@ export default function AskAIScreen() {
     scrollRef.current?.scrollToEnd({ animated: true });
 
     try {
-      const answer = await gemini.playerAnalysis(question, '', '', 'fantasy sports');
+      const answer = await gemini.chat(question, sportLabel);
       setMessages(prev => [...prev, { role: 'ai', text: answer }]);
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'Something went wrong. Try again.' }]);
@@ -82,7 +107,7 @@ export default function AskAIScreen() {
           {messages.length === 1 && (
             <View style={styles.suggestions}>
               <Text style={styles.suggestionsLabel}>Try asking:</Text>
-              {SUGGESTED.map((s, i) => (
+              {(SUGGESTED[currentSport] ?? SUGGESTED.nfl).map((s, i) => (
                 <TouchableOpacity key={i} style={styles.suggestionChip} onPress={() => send(s)}>
                   <Text style={styles.suggestionText}>{s}</Text>
                 </TouchableOpacity>

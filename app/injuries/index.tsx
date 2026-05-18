@@ -7,8 +7,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { sleeper, SleeperPlayer } from '@services/sleeper';
+import { espn, EspnInjury } from '@services/espn';
 import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
+import { useUserStore } from '@store/useUserStore';
+import { SPORTS, type SportId } from '@constants/sports';
+import { SportSwitcher } from '@components/ui/SportSwitcher';
+import { SportTint } from '@components/shared/SportTint';
+import { EmptyState } from '@components/shared/EmptyState';
+import { TeamLogo } from '@components/shared/TeamLogo';
+import { PlayerAvatar } from '@components/shared/PlayerAvatar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -26,7 +34,7 @@ import { typography } from '@constants/typography';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InjuryStatus = 'OUT' | 'DOUBTFUL' | 'QUESTIONABLE' | 'LIMITED' | 'FULL';
-type Pos          = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
+type Pos          = string;
 type ImpactLevel  = 'critical' | 'high' | 'medium' | 'low';
 
 interface InjuryReport {
@@ -75,7 +83,7 @@ const IMPACT_LABELS: Record<ImpactLevel, string> = {
   low:      'LOW',
 };
 
-const POS_COLORS: Record<Pos, string> = {
+const POS_COLORS: Record<string, string> = {
   QB:  colors.coral,
   RB:  colors.green,
   WR:  colors.blue,
@@ -83,6 +91,7 @@ const POS_COLORS: Record<Pos, string> = {
   K:   colors.textTertiary,
   DEF: colors.purple,
 };
+const posColor = (pos: string): string => POS_COLORS[pos] ?? colors.textSecondary;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -125,6 +134,38 @@ function estimateOwnership(rank: number | null): number {
 
 function safePos(pos: string): Pos {
   return (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos) ? pos : 'WR') as Pos;
+}
+
+function buildReportsFromEspn(injuries: EspnInjury[]): InjuryReport[] {
+  return injuries
+    .filter(i => i.athlete && i.status)
+    .map((i): InjuryReport => {
+      const pos = i.athlete.position?.abbreviation ?? '—';
+      const detail = i.details;
+      const injuryText = i.shortComment
+        || [detail?.type, detail?.location, detail?.side].filter(Boolean).join(' ')
+        || i.type
+        || 'Undisclosed';
+      const timeline = detail?.returnDate
+        ? `Return: ${new Date(detail.returnDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+        : statusToTimeline(i.status);
+      return {
+        id:        `${i.athlete.id}-${i.id}`,
+        name:      i.athlete.fullName || i.athlete.displayName,
+        team:      i.athlete.team?.abbreviation ?? '—',
+        pos,
+        status:    normalizeStatus(i.status),
+        injury:    injuryText,
+        bodyPart:  detail?.location ?? 'Undisclosed',
+        impact:    'medium',
+        timeline,
+        owned:     30,
+        aiTake:    '',
+        updatedAt: 'Live',
+      };
+    })
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
+    .slice(0, 40);
 }
 
 function buildReports(players: Record<string, SleeperPlayer>): InjuryReport[] {
@@ -174,25 +215,27 @@ function StatusPill({ status }: { status: InjuryStatus }) {
 }
 
 function PosBadge({ pos }: { pos: Pos }) {
+  const color = posColor(pos);
   return (
-    <View style={[posStyle.badge, { backgroundColor: `${POS_COLORS[pos]}18` }]}>
-      <Text variant="labelSmall" style={{ color: POS_COLORS[pos] }}>{pos}</Text>
+    <View style={[posStyle.badge, { backgroundColor: `${color}18` }]}>
+      <Text variant="labelSmall" style={{ color }}>{pos}</Text>
     </View>
   );
 }
 
 function InjuryCard({ report, index }: { report: InjuryReport; index: number }) {
+  const sport                         = useUserStore((s) => s.currentSport);
   const impactColor                   = IMPACT_COLORS[report.impact];
   const [aiTake, setAiTake]           = useState('');
   const [aiLoading, setAiLoading]     = useState(false);
 
   useEffect(() => {
     setAiLoading(true);
-    gemini.injuryImpact(report.name, `${report.status} — ${report.injury} (${report.timeline})`, 'NFL')
+    gemini.injuryImpact(report.name, `${report.status} — ${report.injury} (${report.timeline})`, SPORTS[sport].shortLabel)
       .then(setAiTake)
       .catch(() => {})
       .finally(() => setAiLoading(false));
-  }, [report.id]);
+  }, [report.id, sport]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(10);
@@ -209,15 +252,25 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
         {/* Top */}
         <View style={icard.top}>
           <View style={icard.topLeft}>
-            <PosBadge pos={report.pos} />
-            <Text variant="bodyMedium" color={colors.textPrimary}>{report.name}</Text>
+            <PlayerAvatar sport={sport} id={report.id.split('-')[0]} name={report.name} size={36} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <PosBadge pos={report.pos} />
+                <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1} style={{ flex: 1 }}>
+                  {report.name}
+                </Text>
+              </View>
+            </View>
           </View>
           <StatusPill status={report.status} />
         </View>
 
         {/* Meta */}
         <View style={icard.meta}>
-          <Text variant="caption" color={colors.textTertiary}>{report.team} · {report.injury}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <TeamLogo sport={sport} team={report.team} size={12} />
+            <Text variant="caption" color={colors.textTertiary}>{report.team} · {report.injury}</Text>
+          </View>
           <View style={icard.liveBadge}>
             <View style={icard.liveDot} />
             <Text variant="caption" style={{ color: colors.green }}>LIVE</Text>
@@ -272,24 +325,30 @@ function InjuryCard({ report, index }: { report: InjuryReport; index: number }) 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function InjuriesScreen() {
+  const sport                         = useUserStore((s) => s.currentSport);
+  const sportDef                      = SPORTS[sport];
   const [filter, setFilter]           = useState<FilterTab>('ALL');
   const [injuries, setInjuries]       = useState<InjuryReport[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  const loadInjuries = useCallback(async () => {
+  const loadInjuries = useCallback(async (sportId: SportId) => {
     setDataLoading(true);
     try {
-      const players  = await sleeper.getAllPlayers();
-      const reports  = buildReports(players);
-      setInjuries(reports);
+      if (sportId === 'nfl') {
+        const players = await sleeper.getAllPlayers();
+        setInjuries(buildReports(players));
+      } else {
+        const espnInjuries = await espn.injuries(sportId);
+        setInjuries(buildReportsFromEspn(espnInjuries));
+      }
     } catch {
-      // keep empty
+      setInjuries([]);
     } finally {
       setDataLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadInjuries(); }, [loadInjuries]);
+  useEffect(() => { loadInjuries(sport); }, [loadInjuries, sport]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -307,6 +366,7 @@ export default function InjuriesScreen() {
 
   return (
     <View style={styles.container}>
+      <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
@@ -326,7 +386,7 @@ export default function InjuriesScreen() {
             <Text style={styles.title}>INJURY{'\n'}REPORT.</Text>
             <View style={styles.subtitleRow}>
               <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
-                Live NFL injury statuses pulled from Sleeper — AI fantasy impact for each.
+                Live {sportDef.shortLabel} injury statuses — AI fantasy impact for each.
               </Text>
               <View style={styles.livePill}>
                 <View style={styles.liveDot} />

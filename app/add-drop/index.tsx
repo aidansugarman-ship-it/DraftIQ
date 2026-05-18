@@ -7,8 +7,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { sleeper, SleeperPlayer } from '@services/sleeper';
+import { espn, EspnNewsItem, EspnInjury } from '@services/espn';
 import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
+import { useUserStore } from '@store/useUserStore';
+import { SPORTS, type SportId } from '@constants/sports';
+import { SportSwitcher } from '@components/ui/SportSwitcher';
+import { SportTint } from '@components/shared/SportTint';
+import { EmptyState } from '@components/shared/EmptyState';
+import { TeamLogo } from '@components/shared/TeamLogo';
+import { PlayerAvatar } from '@components/shared/PlayerAvatar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -113,6 +121,47 @@ function buildReason(p: SleeperPlayer, count: number, action: 'add' | 'drop'): s
   return `Trending with ${count.toLocaleString()} ${word} in the last 24 hours.`;
 }
 
+function buildHandcuffs(players: Record<string, SleeperPlayer>): WaiverTarget[] {
+  // Find injured starters at fantasy-relevant positions
+  const injuredStarters = Object.values(players).filter(p =>
+    FANTASY_POS.has(p.position) &&
+    !!p.team &&
+    !!p.injury_status &&
+    /^(out|ir|doubt)/i.test(p.injury_status) &&
+    p.depth_chart_position === 1,
+  );
+
+  const handcuffs: WaiverTarget[] = [];
+  for (const starter of injuredStarters) {
+    // Backup: same team, same position, depth chart 2 (or 3 for RBs)
+    const backup = Object.values(players).find(p =>
+      p.team === starter.team &&
+      p.position === starter.position &&
+      p.depth_chart_position && p.depth_chart_position >= 2 && p.depth_chart_position <= 3 &&
+      p.player_id !== starter.player_id,
+    );
+    if (!backup) continue;
+    const backupName  = backup.full_name || `${backup.first_name} ${backup.last_name}`;
+    const starterName = starter.full_name || 'The starter';
+    handcuffs.push({
+      id:       `handcuff-${backup.player_id}`,
+      name:     backupName,
+      team:     backup.team!,
+      pos:      safePos(backup.position),
+      owned:    estimateOwnership(backup.search_rank),
+      trend:    9999,
+      score:    93,
+      action:   'add',
+      priority: 'high',
+      reason:   `🚨 ${starterName} is ${starter.injury_status} — ${backupName} steps into the starting role.`,
+      aiTake:   '',
+      byeWeek:  0,
+    });
+    if (handcuffs.length >= 5) break;
+  }
+  return handcuffs;
+}
+
 function buildTargets(
   adds: { player_id: string; count: number }[],
   drops: { player_id: string; count: number }[],
@@ -164,7 +213,12 @@ function buildTargets(
       };
     });
 
-  return [...addTargets, ...dropTargets];
+  // Handcuffs first (highest priority — injured starter → backup)
+  const handcuffTargets = buildHandcuffs(players);
+  // Dedupe: don't show a player as both handcuff and trending add
+  const handcuffIds = new Set(handcuffTargets.map(h => h.id.replace('handcuff-', '')));
+  const filteredAdds = addTargets.filter(a => !handcuffIds.has(a.id));
+  return [...handcuffTargets, ...filteredAdds, ...dropTargets];
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -244,12 +298,14 @@ function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) 
 
         {/* Player info */}
         <View style={card.playerRow}>
+          <PlayerAvatar sport="nfl" id={target.id.replace(/^(handcuff|drop)-/, '')} name={target.name} size={44} />
           <View style={{ flex: 1 }}>
             <View style={card.nameRow}>
               <PosBadge pos={target.pos} />
               <Text variant="bodyMedium" color={colors.textPrimary}>{target.name}</Text>
             </View>
             <View style={card.metaRow}>
+              <TeamLogo sport="nfl" team={target.team} size={14} />
               <Text variant="caption" color={colors.textTertiary}>{target.team}</Text>
               {target.injury && (
                 <View style={card.injuryTag}>
@@ -298,29 +354,279 @@ function WaiverCard({ target, index }: { target: WaiverTarget; index: number }) 
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
+// ─── Player watch card for non-NFL sports — surfaces injured players as add/drop signals ─────
+
+function PlayerWatchCard({ item, index, sport }: { item: EspnInjury; index: number; sport: SportId }) {
+  const [aiTake, setAiTake]       = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAI, setShowAI]       = useState(false);
+
+  const pos    = item.athlete.position?.abbreviation ?? '—';
+  const team   = item.athlete.team?.abbreviation ?? 'FA';
+  const status = item.status.toUpperCase();
+  const isOut  = /^(OUT|IR|DOUBT)/i.test(status);
+  const detail = item.shortComment
+    || [item.details?.type, item.details?.location, item.details?.side].filter(Boolean).join(' ')
+    || item.type;
+
+  const handleAskAI = useCallback(() => {
+    if (aiTake) { setShowAI(v => !v); return; }
+    setShowAI(true);
+    setAiLoading(true);
+    const sportLabel = SPORTS[sport].shortLabel;
+    const prompt = `${item.athlete.fullName} (${pos}, ${team}) is ${status}${detail ? ` — ${detail}` : ''}. From a fantasy ${sportLabel} angle: should the owner DROP him, HOLD, or is this a BUY-LOW window? Who's the best replacement to ADD off waivers? Sharp call + one-line reasoning.`;
+    gemini.articleTake(prompt, sportLabel)
+      .then(setAiTake)
+      .catch(() => setAiTake('AI take unavailable right now.'))
+      .finally(() => setAiLoading(false));
+  }, [aiTake, item, pos, team, status, detail, sport]);
+
+  const op = useSharedValue(0);
+  const ty = useSharedValue(10);
+  useEffect(() => {
+    op.value = withDelay(index * 50, withTiming(1, { duration: 350 }));
+    ty.value = withDelay(index * 50, withTiming(0, { duration: 350, easing: Easing.out(Easing.quad) }));
+  }, []);
+  const anim = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
+
+  return (
+    <Animated.View style={anim}>
+      <View style={[playerWatchStyles.wrap, isOut && playerWatchStyles.wrapHot]}>
+        <TouchableOpacity onPress={handleAskAI} activeOpacity={0.85} style={playerWatchStyles.top}>
+          <PlayerAvatar sport={sport} id={item.athlete.id} name={item.athlete.fullName} size={40} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text variant="labelSmall" color={colors.textTertiary}>{pos}</Text>
+              <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1} style={{ flex: 1 }}>
+                {item.athlete.fullName}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <TeamLogo sport={sport} team={team} size={12} />
+              <Text variant="caption" color={colors.textTertiary} numberOfLines={1} style={{ flex: 1 }}>
+                {team} · {detail}
+              </Text>
+            </View>
+          </View>
+          <View style={[playerWatchStyles.statusPill, { backgroundColor: `${isOut ? colors.coral : colors.gold}18`, borderColor: `${isOut ? colors.coral : colors.gold}50` }]}>
+            <Text variant="labelSmall" style={{ color: isOut ? colors.coral : colors.gold, fontSize: 10 }}>
+              {status}
+            </Text>
+          </View>
+          <Ionicons name={showAI ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textTertiary} />
+        </TouchableOpacity>
+
+        {showAI && (
+          <View style={playerWatchStyles.aiBox}>
+            <Text variant="labelSmall" color={colors.textTertiary} style={{ marginBottom: 4, letterSpacing: 0.6 }}>
+              ADD / DROP TAKE
+            </Text>
+            {aiLoading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator size="small" color={colors.green} />
+                <Text variant="bodySmall" color={colors.textTertiary}>Thinking…</Text>
+              </View>
+            ) : (
+              <Text variant="bodySmall" color={colors.textSecondary}>{aiTake}</Text>
+            )}
+          </View>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+const playerWatchStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    marginBottom:    spacing.sm,
+    overflow:        'hidden',
+  },
+  wrapHot: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.coral,
+  },
+  top: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.sm,
+    padding:       spacing.base,
+  },
+  posTag: {
+    width:           40,
+    paddingVertical: 4,
+    borderRadius:    radius.sm,
+    backgroundColor: colors.background,
+    alignItems:      'center',
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical:   3,
+    borderRadius:      999,
+    borderWidth:       1,
+  },
+  aiBox: {
+    paddingHorizontal: spacing.base,
+    paddingBottom:     spacing.base,
+    paddingTop:        spacing.xs,
+    borderTopWidth:    1,
+    borderTopColor:    colors.border,
+    backgroundColor:   `${colors.green}06`,
+  },
+});
+
+// ─── News card for non-NFL sports ─────────────────────────────────────────────
+
+function NewsCard({ item, index, sport }: { item: EspnNewsItem; index: number; sport: SportId }) {
+  const [aiTake, setAiTake]       = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAI, setShowAI]       = useState(false);
+
+  const handleAskAI = useCallback(() => {
+    if (aiTake) {
+      setShowAI((v) => !v);
+      return;
+    }
+    setShowAI(true);
+    setAiLoading(true);
+    gemini.articleTake(item.headline, SPORTS[sport].shortLabel)
+      .then(setAiTake)
+      .catch(() => setAiTake('AI take unavailable right now.'))
+      .finally(() => setAiLoading(false));
+  }, [aiTake, item.headline, sport]);
+
+  const op = useSharedValue(0);
+  const ty = useSharedValue(10);
+  useEffect(() => {
+    op.value = withDelay(index * 55, withTiming(1, { duration: 350 }));
+    ty.value = withDelay(index * 55, withTiming(0, { duration: 350, easing: Easing.out(Easing.quad) }));
+  }, []);
+  const anim = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
+
+  return (
+    <Animated.View style={anim}>
+      <View style={newsCardStyles.wrap}>
+        <Text variant="bodyMedium" color={colors.textPrimary} style={newsCardStyles.headline}>
+          {item.headline}
+        </Text>
+        {item.description ? (
+          <Text variant="bodySmall" color={colors.textSecondary} numberOfLines={2} style={newsCardStyles.desc}>
+            {item.description}
+          </Text>
+        ) : null}
+
+        <View style={newsCardStyles.bottomRow}>
+          <Text variant="caption" color={colors.textTertiary}>
+            {new Date(item.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          </Text>
+          <TouchableOpacity onPress={handleAskAI} activeOpacity={0.7} style={newsCardStyles.askBtn}>
+            <Ionicons name="flash" size={14} color={colors.green} />
+            <Text variant="labelSmall" style={{ color: colors.green }}>
+              {showAI && aiTake ? 'Hide AI take' : 'Ask AI'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showAI && (
+          <View style={newsCardStyles.aiBox}>
+            {aiLoading ? (
+              <ActivityIndicator size="small" color={colors.green} />
+            ) : (
+              <Text variant="bodySmall" color={colors.textSecondary}>{aiTake}</Text>
+            )}
+          </View>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+const newsCardStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor:   colors.surface,
+    borderRadius:      radius.lg,
+    padding:           spacing.base,
+    marginBottom:      spacing.sm,
+    borderWidth:       1,
+    borderColor:       colors.border,
+  },
+  headline: {
+    marginBottom: 6,
+    lineHeight:   20,
+  },
+  desc: {
+    lineHeight: 18,
+    marginBottom: spacing.sm,
+  },
+  bottomRow: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'space-between',
+    marginTop:        spacing.xs,
+  },
+  askBtn: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:  6,
+    borderRadius:     radius.sm,
+    backgroundColor:  `${colors.green}14`,
+    borderWidth:      1,
+    borderColor:      `${colors.green}40`,
+  },
+  aiBox: {
+    marginTop:        spacing.sm,
+    padding:          spacing.sm,
+    borderRadius:     radius.sm,
+    backgroundColor:  `${colors.green}0A`,
+    borderLeftWidth:  2,
+    borderLeftColor:  colors.green,
+  },
+});
+
 export default function AddDropScreen() {
+  const sport                         = useUserStore((s) => s.currentSport);
+  const sportDef                      = SPORTS[sport];
   const [filter, setFilter]           = useState<FilterTab>('ALL');
   const [waiverTargets, setTargets]   = useState<WaiverTarget[]>([]);
+  const [playerWatch, setPlayerWatch] = useState<EspnInjury[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (sportId: SportId) => {
     setDataLoading(true);
     try {
-      const [adds, drops, players] = await Promise.all([
-        sleeper.getTrendingAdds(20),
-        sleeper.getTrendingDrops(8),
-        sleeper.getAllPlayers(),
-      ]);
-      const targets = buildTargets(adds, drops, players);
-      setTargets(targets);
+      if (sportId === 'nfl') {
+        setPlayerWatch([]);
+        const [adds, drops, players] = await Promise.all([
+          sleeper.getTrendingAdds(20),
+          sleeper.getTrendingDrops(8),
+          sleeper.getAllPlayers(),
+        ]);
+        setTargets(buildTargets(adds, drops, players));
+      } else {
+        setTargets([]);
+        // Real player movement signals: anyone with an injury status is either a drop candidate
+        // (their owner wants out) or a "replace him" opportunity (grab the backup).
+        const injuries = await espn.injuries(sportId);
+        setPlayerWatch(
+          injuries
+            .filter(i => i.athlete && i.status)
+            .slice(0, 25),
+        );
+      }
     } catch {
-      // keep empty, show fallback
+      setTargets([]);
+      setPlayerWatch([]);
     } finally {
       setDataLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadData(sport); }, [loadData, sport]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -338,6 +644,7 @@ export default function AddDropScreen() {
 
   return (
     <View style={styles.container}>
+      <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
@@ -357,7 +664,9 @@ export default function AddDropScreen() {
             <Text style={styles.title}>WAIVER{'\n'}WIRE.</Text>
             <View style={styles.subtitleRow}>
               <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
-                Live trending players from Sleeper — AI-ranked adds, drops, and streamers.
+                {sport === 'nfl'
+                  ? 'Live trending players — AI-ranked adds, drops, and streamers.'
+                  : `Players moving in ${sportDef.shortLabel} right now. Tap any card for an AI add/drop call.`}
               </Text>
               <View style={styles.livePill}>
                 <View style={styles.liveDot} />
@@ -366,59 +675,75 @@ export default function AddDropScreen() {
             </View>
           </Animated.View>
 
-          {/* Summary pills */}
-          <Animated.View style={[styles.summaryRow, heroStyle]}>
-            {[
-              { label: 'ADDS',    count: addCount,    color: colors.green },
-              { label: 'DROPS',   count: dropCount,   color: colors.coral },
-              { label: 'STREAMS', count: streamCount, color: colors.gold },
-            ].map(s => (
-              <View key={s.label} style={[styles.summaryPill, { borderColor: `${s.color}30`, backgroundColor: `${s.color}0C` }]}>
-                {dataLoading
-                  ? <ActivityIndicator size="small" color={s.color} />
-                  : <Text variant="h3" style={{ color: s.color }}>{s.count}</Text>
-                }
-                <Text variant="caption" color={colors.textTertiary} style={{ letterSpacing: 0.8 }}>{s.label}</Text>
-              </View>
-            ))}
-          </Animated.View>
+          {/* Summary pills + filter tabs — NFL only (waiver flow) */}
+          {sport === 'nfl' && (
+            <>
+              <Animated.View style={[styles.summaryRow, heroStyle]}>
+                {[
+                  { label: 'ADDS',    count: addCount,    color: colors.green },
+                  { label: 'DROPS',   count: dropCount,   color: colors.coral },
+                  { label: 'STREAMS', count: streamCount, color: colors.gold },
+                ].map(s => (
+                  <View key={s.label} style={[styles.summaryPill, { borderColor: `${s.color}30`, backgroundColor: `${s.color}0C` }]}>
+                    {dataLoading
+                      ? <ActivityIndicator size="small" color={s.color} />
+                      : <Text variant="h3" style={{ color: s.color }}>{s.count}</Text>
+                    }
+                    <Text variant="caption" color={colors.textTertiary} style={{ letterSpacing: 0.8 }}>{s.label}</Text>
+                  </View>
+                ))}
+              </Animated.View>
 
-          {/* Filter tabs */}
-          <View style={styles.filterRow}>
-            {(['ALL', 'ADD', 'DROP', 'STREAM'] as FilterTab[]).map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.filterTab, filter === tab && styles.filterTabActive]}
-                onPress={() => setFilter(tab)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  variant="labelSmall"
-                  style={{ color: filter === tab ? colors.textPrimary : colors.textTertiary, letterSpacing: 0.6 }}
-                >
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+              <View style={styles.filterRow}>
+                {(['ALL', 'ADD', 'DROP', 'STREAM'] as FilterTab[]).map(tab => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.filterTab, filter === tab && styles.filterTabActive]}
+                    onPress={() => setFilter(tab)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      variant="labelSmall"
+                      style={{ color: filter === tab ? colors.textPrimary : colors.textTertiary, letterSpacing: 0.6 }}
+                    >
+                      {tab}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
 
           {/* Cards */}
           {dataLoading ? (
             <View style={styles.loadingBox}>
               <ActivityIndicator size="large" color={colors.green} />
               <Text variant="bodySmall" color={colors.textTertiary} style={{ marginTop: spacing.md }}>
-                Fetching live Sleeper data…
+                Fetching live {sportDef.shortLabel} data…
               </Text>
             </View>
-          ) : filtered.length > 0 ? (
-            filtered.map((target, i) => (
-              <WaiverCard key={target.id} target={target} index={i} />
+          ) : sport === 'nfl' ? (
+            filtered.length > 0 ? (
+              filtered.map((target, i) => (
+                <WaiverCard key={target.id} target={target} index={i} />
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyEmoji}>🔍</Text>
+                <Text variant="body" color={colors.textSecondary} align="center">
+                  No {filter.toLowerCase()} recommendations right now.
+                </Text>
+              </View>
+            )
+          ) : playerWatch.length > 0 ? (
+            playerWatch.map((item, i) => (
+              <PlayerWatchCard key={`${item.athlete.id}-${item.id}`} item={item} index={i} sport={sport} />
             ))
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🔍</Text>
+              <Text style={styles.emptyEmoji}>🏥</Text>
               <Text variant="body" color={colors.textSecondary} align="center">
-                No {filter.toLowerCase()} recommendations right now.
+                No active {sportDef.shortLabel} player movement right now.
               </Text>
             </View>
           )}

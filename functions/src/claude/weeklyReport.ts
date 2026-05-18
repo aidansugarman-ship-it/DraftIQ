@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaude } from '../utils/claudeClient';
 
 interface WeeklyReportRequest {
@@ -21,7 +21,7 @@ interface WeeklyReportRequest {
 
 // GM tier only — delivered every Tuesday morning via push notification
 export const generateWeeklyReport = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: WeeklyReportRequest) => {
     const userMessage = `
 Generate a personalized DraftIQ GM Report for a ${data.sport} fantasy manager.

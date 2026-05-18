@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -23,6 +23,9 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useUserStore } from '@store/useUserStore';
+import { SPORTS, type SportId } from '@constants/sports';
+import { sleeper } from '@services/sleeper';
+import { espn } from '@services/espn';
 import { canAccess } from '@constants/tiers';
 import { gemini } from '@services/gemini';
 import { useGeminiTake } from '@hooks/useGeminiTake';
@@ -238,21 +241,74 @@ type Tab = 'analysis' | 'stats' | 'schedule' | 'news';
 
 export default function PlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const tier    = useUserStore((s) => s.tier);
+  const tier        = useUserStore((s) => s.tier);
+  const currentSport = useUserStore((s) => s.currentSport);
+  const sportLabel  = SPORTS[currentSport].shortLabel;
   const [activeTab, setActiveTab] = useState<Tab>('analysis');
 
-  const player = MOCK_PLAYER;
+  // Fetch real player metadata — Sleeper for NFL, ESPN for others.
+  const [realMeta, setRealMeta] = useState<Partial<typeof MOCK_PLAYER> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!id) { setRealMeta(null); return; }
+
+    if (currentSport === 'nfl') {
+      sleeper.getAllPlayers().then((all) => {
+        if (cancelled) return;
+        const p = all[id];
+        if (!p) { setRealMeta(null); return; }
+        setRealMeta({
+          id:             p.player_id,
+          name:           p.full_name || `${p.first_name} ${p.last_name}`,
+          firstName:      p.first_name,
+          lastName:       p.last_name,
+          position:       p.position,
+          team:           p.team ?? 'FA',
+          teamAbbrev:     p.team ?? 'FA',
+          age:            p.age ?? MOCK_PLAYER.age,
+          experience:     p.years_exp ?? MOCK_PLAYER.experience,
+          jerseyNumber:   p.number?.toString() ?? MOCK_PLAYER.jerseyNumber,
+          injuryStatus:   (p.injury_status?.toLowerCase() as any) ?? 'healthy',
+          injuryNote:     p.injury_notes ?? '',
+          injuryBodyPart: p.injury_body_part ?? '',
+        });
+      }).catch(() => setRealMeta(null));
+    } else {
+      espn.athlete(currentSport, id).then((a) => {
+        if (cancelled || !a) { setRealMeta(null); return; }
+        setRealMeta({
+          id:             a.id,
+          name:           a.fullName || a.displayName,
+          firstName:      a.fullName?.split(' ')[0],
+          lastName:       a.fullName?.split(' ').slice(1).join(' '),
+          position:       a.position?.abbreviation ?? '—',
+          team:           a.team?.displayName ?? a.team?.abbreviation ?? 'FA',
+          teamAbbrev:     a.team?.abbreviation ?? 'FA',
+          age:            a.age ?? MOCK_PLAYER.age,
+          jerseyNumber:   a.jersey ?? MOCK_PLAYER.jerseyNumber,
+          injuryStatus:   (a.status?.name?.toLowerCase() as any) ?? 'healthy',
+        });
+      }).catch(() => setRealMeta(null));
+    }
+
+    return () => { cancelled = true; };
+  }, [id, currentSport]);
+
+  const player = useMemo(
+    () => realMeta ? { ...MOCK_PLAYER, ...realMeta } : MOCK_PLAYER,
+    [realMeta]
+  );
 
   const { take: whyDraft, loading: loadingDraft } = useGeminiTake(
-    () => gemini.playerAnalysis(player.name, player.position, player.team, 'NFL'),
-    [player.name]
+    () => gemini.playerAnalysis(player.name, player.position, player.team, sportLabel),
+    [player.name, sportLabel]
   );
   const { take: whyAvoid, loading: loadingAvoid } = useGeminiTake(
     () => gemini.playerAnalysis(
       `Risks and concerns for ${player.name} (${player.position}, ${player.team}) — injury history, schedule, situation`,
-      player.position, player.team, 'NFL'
+      player.position, player.team, sportLabel
     ),
-    [player.name]
+    [player.name, sportLabel]
   );
 
   const op = useSharedValue(0);
@@ -393,32 +449,57 @@ export default function PlayerScreen() {
             {/* Stats */}
             {activeTab === 'stats' && (
               <View style={styles.section}>
-                <Text variant="label" color={colors.textTertiary} style={styles.subLabel}>
-                  LAST 5 WEEKS
-                </Text>
-                <View style={styles.perfList}>
-                  {player.recentPerformance.map((p, i) => (
-                    <PerfBar
-                      key={p.week}
-                      week={p.week}
-                      opponent={p.opponent}
-                      isHome={p.isHome}
-                      pts={p.fantasyPoints}
-                      max={maxPts}
-                      delay={i * 60}
-                    />
-                  ))}
-                </View>
-                <View style={styles.statGrid}>
-                  {Object.entries(player.recentPerformance[0].stats).map(([k, v]) => (
-                    <View key={k} style={styles.statGridCell}>
-                      <Text style={styles.statGridValue}>{v}</Text>
-                      <Text variant="caption" color={colors.textTertiary}>
-                        {k.replace(/_/g, ' ').toUpperCase()}
+                {currentSport === 'nfl' ? (
+                  <>
+                    <Text variant="label" color={colors.textTertiary} style={styles.subLabel}>
+                      LAST 5 WEEKS
+                    </Text>
+                    <View style={styles.perfList}>
+                      {player.recentPerformance.map((p, i) => (
+                        <PerfBar
+                          key={p.week}
+                          week={p.week}
+                          opponent={p.opponent}
+                          isHome={p.isHome}
+                          pts={p.fantasyPoints}
+                          max={maxPts}
+                          delay={i * 60}
+                        />
+                      ))}
+                    </View>
+                    <View style={styles.statGrid}>
+                      {Object.entries(player.recentPerformance[0].stats).map(([k, v]) => (
+                        <View key={k} style={styles.statGridCell}>
+                          <Text style={styles.statGridValue}>{v}</Text>
+                          <Text variant="caption" color={colors.textTertiary}>
+                            {k.replace(/_/g, ' ').toUpperCase()}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text variant="label" color={colors.textTertiary} style={styles.subLabel}>
+                      KEY {sportLabel} STATS
+                    </Text>
+                    <View style={styles.statGrid}>
+                      {SPORTS[currentSport].statLabels.keyStats.map((statName) => (
+                        <View key={statName} style={styles.statGridCell}>
+                          <Text style={styles.statGridValue}>—</Text>
+                          <Text variant="caption" color={colors.textTertiary}>
+                            {statName.toUpperCase()}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={{ padding: spacing.md, marginTop: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md }}>
+                      <Text variant="bodySmall" color={colors.textSecondary} align="center">
+                        Real {sportLabel} game logs coming when we wire a proper stats source (next push).
                       </Text>
                     </View>
-                  ))}
-                </View>
+                  </>
+                )}
               </View>
             )}
 

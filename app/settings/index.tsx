@@ -111,6 +111,15 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
+        <Section title="LEAGUES">
+          <Row
+            icon="link-outline"
+            label="Connect Sleeper League"
+            onPress={() => router.push('/settings/connect-sleeper')}
+            last
+          />
+        </Section>
+
         <Section title="SUBSCRIPTION">
           <Row
             icon="trophy-outline"

@@ -116,7 +116,7 @@ export default function LeagueSettingsScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={2} totalSteps={5} />
+        <OnboardingProgress step={3} totalSteps={4} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -192,7 +192,7 @@ export default function LeagueSettingsScreen() {
 
       <OnboardingFooter
         primaryLabel={isValid ? 'Continue' : 'Pick a scoring type'}
-        onPrimary={() => router.push('/(onboarding)/archetype')}
+        onPrimary={() => router.push('/(onboarding)/notifications')}
         primaryDisabled={!isValid}
       />
     </View>

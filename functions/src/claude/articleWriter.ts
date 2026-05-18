@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaude } from '../utils/claudeClient';
 
 interface ArticleRequest {
@@ -9,7 +9,7 @@ interface ArticleRequest {
 }
 
 export const generateArticle = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: ArticleRequest) => {
     const userMessage = `
 Write a DraftIQ editorial article for ${data.sport} fantasy managers.

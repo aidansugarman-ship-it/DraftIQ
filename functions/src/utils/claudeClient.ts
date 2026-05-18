@@ -1,69 +1,84 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// ANTHROPIC_API_KEY is a Firebase secret — never in client code.
-// Set via: firebase functions:secrets:set ANTHROPIC_API_KEY
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// All AI calls route through Gemini now — Anthropic was removed to stay on free tier.
+// GEMINI_API_KEY is a Firebase secret — never in client code.
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '');
 
-// Use claude-sonnet-4-20250514 for all deep analysis, writing, and reasoning tasks
-export const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+// Model name kept as CLAUDE_MODEL so the rest of the codebase doesn't need to change.
+// Maps to Gemini under the hood. Use gemini-2.0-flash for deep analysis.
+export const CLAUDE_MODEL = 'gemini-2.0-flash';
 
 export interface ClaudeOptions {
   maxTokens?: number;
   temperature?: number;
 }
 
-/**
- * Single-turn Claude call with a system prompt and user message.
- * All DraftIQ AI calls funnel through here — makes it easy to add
- * logging, rate limiting, or model swaps in one place.
- */
 export const callClaude = async (
   systemPrompt: string,
   userMessage: string,
   options: ClaudeOptions = {}
 ): Promise<string> => {
-  const { maxTokens = 1024, temperature } = options;
+  const { maxTokens = 1024, temperature = 0.7 } = options;
 
-  const message = await client.messages.create({
-    model:      CLAUDE_MODEL,
-    max_tokens: maxTokens,
-    system:     systemPrompt,
-    messages:   [{ role: 'user', content: userMessage }],
-    ...(temperature !== undefined && { temperature }),
-  });
-
-  const content = message.content[0];
-  if (content.type !== 'text') {
-    throw new Error(`Unexpected Claude response type: ${content.type}`);
+  if (!userMessage.trim()) {
+    throw new Error('callClaude: userMessage cannot be empty');
   }
 
-  return content.text;
+  const model = genAI.getGenerativeModel({
+    model: CLAUDE_MODEL,
+    systemInstruction: systemPrompt.trim() ? systemPrompt : undefined,
+    generationConfig: {
+      maxOutputTokens: maxTokens,
+      temperature,
+    },
+  });
+
+  const result = await model.generateContent(userMessage);
+  return result.response.text();
 };
 
-/**
- * Multi-turn conversation — used for War Room mode where context builds
- * across picks during a live draft session.
- */
 export const callClaudeConversation = async (
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   options: ClaudeOptions = {}
 ): Promise<string> => {
-  const { maxTokens = 512 } = options;
+  const { maxTokens = 512, temperature = 0.7 } = options;
 
-  const response = await client.messages.create({
-    model:      CLAUDE_MODEL,
-    max_tokens: maxTokens,
-    system:     systemPrompt,
-    messages,
-  });
+  const validMessages = messages.filter(
+    m => typeof m.content === 'string' && m.content.trim().length > 0
+  );
 
-  const content = response.content[0];
-  if (content.type !== 'text') {
-    throw new Error(`Unexpected Claude response type: ${content.type}`);
+  if (validMessages.length === 0) {
+    throw new Error('callClaudeConversation: no non-empty messages to send');
   }
 
-  return content.text;
+  const model = genAI.getGenerativeModel({
+    model: CLAUDE_MODEL,
+    systemInstruction: systemPrompt.trim() ? systemPrompt : undefined,
+    generationConfig: {
+      maxOutputTokens: maxTokens,
+      temperature,
+    },
+  });
+
+  const lastMessage = validMessages[validMessages.length - 1];
+
+  // If the final message isn't a user turn, Gemini's chat API can't continue —
+  // fall back to a flat formatted prompt.
+  if (lastMessage.role !== 'user') {
+    const combined = validMessages
+      .map(m => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.content}`)
+      .join('\n\n');
+    const result = await model.generateContent(combined);
+    return result.response.text();
+  }
+
+  const history = validMessages.slice(0, -1).map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+
+  const chat = model.startChat({ history });
+  const result = await chat.sendMessage(lastMessage.content);
+  return result.response.text();
 };

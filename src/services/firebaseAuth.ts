@@ -19,8 +19,8 @@ const buildDefaultProfile = (
   photoURL?: string,
 ): Omit<UserProfile, 'uid'> => ({
   email,
-  displayName,
-  photoURL,
+  displayName: displayName ?? null,
+  photoURL:    photoURL    ?? null,
   tier:               'rookie',
   createdAt:          new Date().toISOString(),
   onboardingComplete: false,
@@ -41,6 +41,12 @@ const buildDefaultProfile = (
   watchListPlayerIds: [],
 });
 
+const stripUndefined = <T extends Record<string, unknown>>(obj: T): T => {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
+};
+
 const persistNewUser = async (
   uid: string,
   email: string,
@@ -48,11 +54,11 @@ const persistNewUser = async (
   photoURL?: string,
 ): Promise<void> => {
   const profile = buildDefaultProfile(uid, email, displayName, photoURL);
-  await setDoc(doc(db, COLLECTIONS.USERS, uid), {
+  await setDoc(doc(db, COLLECTIONS.USERS, uid), stripUndefined({
     uid,
     ...profile,
     createdAt: serverTimestamp(),
-  });
+  }));
 };
 
 // ── Email / Password ──────────────────────────────────────────────────────────

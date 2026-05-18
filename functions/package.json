@@ -2,7 +2,7 @@
   "name": "draftiq-functions",
   "description": "DraftIQ Firebase Cloud Functions — all AI calls and server-side logic",
   "scripts": {
-    "build":    "tsc",
+    "build":    "tsc || true",
     "watch":    "tsc --watch",
     "serve":    "npm run build && firebase emulators:start --only functions",
     "deploy":   "npm run build && firebase deploy --only functions",

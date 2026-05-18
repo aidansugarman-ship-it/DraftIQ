@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callGemini, GEMINI_FLASH } from '../utils/geminiClient';
 
 interface HotTakeRequest {

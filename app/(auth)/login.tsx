@@ -116,6 +116,7 @@ export default function LoginScreen() {
       await signInWithEmail(email.trim(), password);
       // onAuthStateChanged in _layout.tsx handles navigation
     } catch (e: any) {
+      console.error('[login] email sign-in failed:', e.code, e.message, e);
       setError(getFriendlyError(e.code));
     } finally {
       setSubmitting(false);
@@ -179,18 +180,8 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {/* Social auth — Apple first (App Store requirement) */}
+            {/* Social auth */}
             <View style={styles.socialSection}>
-              {appleAvail && (
-                <AppleAuthentication.AppleAuthenticationButton
-                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                  cornerRadius={radius.lg}
-                  style={styles.appleBtn}
-                  onPress={handleAppleSignIn}
-                />
-              )}
-
               <TouchableOpacity
                 style={styles.googleBtn}
                 onPress={handleGoogleSignIn}

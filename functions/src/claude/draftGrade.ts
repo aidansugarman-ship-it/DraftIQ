@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaude } from '../utils/claudeClient';
 
 interface DraftGradeRequest {
@@ -18,7 +18,7 @@ interface DraftGradeRequest {
 }
 
 export const getDraftGrade = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: DraftGradeRequest) => {
     const pickSummary = data.picks
       .map(p => `R${p.round} Pick ${p.pickNumber}: ${p.playerName} (${p.position}) — ADP ${p.consensusADP}`)

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -31,11 +31,11 @@ export default function RootLayout() {
       if (firebaseUser) {
         try {
           const snap = await getDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid));
+          let profile: UserProfile;
           if (snap.exists()) {
-            setUser(snap.data() as UserProfile);
+            profile = snap.data() as UserProfile;
           } else {
-            // New user — profile created during sign-up flow
-            setUser({
+            profile = {
               uid:                  firebaseUser.uid,
               email:                firebaseUser.email ?? '',
               displayName:          firebaseUser.displayName ?? undefined,
@@ -58,13 +58,17 @@ export default function RootLayout() {
               connectedLeagues:     [],
               draftBoardIds:        [],
               watchListPlayerIds:   [],
-            });
+            };
           }
-        } catch {
+          setUser(profile);
+          router.replace(profile.onboardingComplete ? '/(tabs)' : '/(onboarding)/sport');
+        } catch (e) {
+          console.error('[auth] failed to load profile after sign-in:', e);
           clearUser();
         }
       } else {
         clearUser();
+        router.replace('/(auth)/welcome');
       }
     });
 

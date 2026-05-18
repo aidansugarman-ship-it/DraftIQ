@@ -15,6 +15,7 @@ export interface UserProfile {
   preferredSports: SportId[];
   leagueSettings?: LeagueSettings;
   archetype?: TeamArchetype;
+  experienceLevel?: 'beginner' | 'experienced';
   gmBadge: boolean;
   pushToken?: string;
   sleeperUsername?: string;

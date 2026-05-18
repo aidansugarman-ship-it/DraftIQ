@@ -29,6 +29,8 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useUserStore } from '@store/useUserStore';
+import { gemini } from '@services/gemini';
+import { SPORTS } from '@constants/sports';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -384,8 +386,10 @@ function RecapScreen({ picks, onRestart }: { picks: Pick[]; onRestart: () => voi
 // ─── Main draft screen ────────────────────────────────────────────────────────
 
 export default function MockDraftScreen() {
-  const user      = useUserStore(s => s.user);
-  const userSlot  = (user?.leagueSettings?.draftPositionNumber ?? 6) - 1;
+  const user        = useUserStore(s => s.user);
+  const sport       = useUserStore(s => s.currentSport);
+  const userSlot    = (user?.leagueSettings?.draftPositionNumber ?? 6) - 1;
+  const sportLabel  = SPORTS[sport].shortLabel;
 
   const [phase,    setPhase]    = useState<Phase>('lobby');
   const [pool,     setPool]     = useState<DraftPlayer[]>([...MOCK_POOL]);
@@ -394,6 +398,10 @@ export default function MockDraftScreen() {
   const [posFilter, setPosFilter] = useState<Position | 'ALL'>('ALL');
   const [aiThinking, setAiThinking] = useState(false);
   const [userTurn, setUserTurn] = useState(false);
+
+  // AI suggestion when it's the user's turn
+  const [suggestion, setSuggestion] = useState<{ player: DraftPlayer; reason: string } | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
 
   const order   = useRef(buildPickOrder(NUM_TEAMS, NUM_ROUNDS)).current;
   const poolRef = useRef(pool);
@@ -448,6 +456,21 @@ export default function MockDraftScreen() {
       }, delay);
     }
   }
+
+  // When it becomes the user's turn, pick the best-by-score available and ask AI for a one-line reason.
+  useEffect(() => {
+    if (!userTurn || isDone) { setSuggestion(null); return; }
+    const best = [...poolRef.current].sort((a, b) => b.score - a.score)[0];
+    if (!best) { setSuggestion(null); return; }
+    const round = order[picks.length]?.round ?? 1;
+    const pickNum = order[picks.length]?.pick ?? 1;
+    setSuggestion({ player: best, reason: '' });
+    setSuggestionLoading(true);
+    gemini.draftPickAdvice(`${best.name} (${best.position}, ${best.team})`, round, pickNum, sportLabel)
+      .then((reason) => setSuggestion({ player: best, reason }))
+      .catch(() => setSuggestion({ player: best, reason: 'Best available by ADP.' }))
+      .finally(() => setSuggestionLoading(false));
+  }, [userTurn, picks.length, isDone, sportLabel]);
 
   function handleUserPick(player: DraftPlayer) {
     if (!userTurn || isDone) return;
@@ -563,6 +586,38 @@ export default function MockDraftScreen() {
             />
             <Ionicons name="time-outline" size={16} color={colors.green} />
             <Text variant="bodyMedium" color={colors.green}>You're on the clock!</Text>
+          </Animated.View>
+        )}
+
+        {/* AI suggestion banner */}
+        {userTurn && suggestion && (
+          <Animated.View entering={FadeIn.duration(300)} style={aiSuggestStyles.wrap}>
+            <View style={aiSuggestStyles.left}>
+              <View style={aiSuggestStyles.iconBubble}>
+                <Ionicons name="flash" size={14} color={colors.green} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="labelSmall" color={colors.textTertiary} style={{ letterSpacing: 0.6 }}>
+                  AI SUGGESTS
+                </Text>
+                <Text variant="bodyMedium" color={colors.textPrimary}>
+                  {suggestion.player.name}
+                  <Text variant="bodySmall" color={colors.textTertiary}>
+                    {'  '}· {suggestion.player.position} · {suggestion.player.team}
+                  </Text>
+                </Text>
+                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }} numberOfLines={3}>
+                  {suggestionLoading && !suggestion.reason ? 'Thinking…' : suggestion.reason}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={aiSuggestStyles.pickBtn}
+              onPress={() => handleUserPick(suggestion.player)}
+              activeOpacity={0.8}
+            >
+              <Text variant="labelSmall" style={{ color: colors.background, letterSpacing: 0.4 }}>PICK</Text>
+            </TouchableOpacity>
           </Animated.View>
         )}
 
@@ -794,6 +849,43 @@ const logRow = StyleSheet.create({
   pickNum: {
     width:      24,
     alignItems: 'center',
+  },
+});
+
+const aiSuggestStyles = StyleSheet.create({
+  wrap: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    backgroundColor:   `${colors.green}10`,
+    borderWidth:       1,
+    borderColor:       `${colors.green}40`,
+    borderRadius:      radius.lg,
+    padding:           spacing.sm,
+    marginHorizontal:  spacing.base,
+    marginBottom:      spacing.sm,
+    gap:               spacing.sm,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems:    'flex-start',
+    gap:           spacing.sm,
+    flex:          1,
+  },
+  iconBubble: {
+    width:          28,
+    height:         28,
+    borderRadius:   14,
+    backgroundColor: `${colors.green}24`,
+    alignItems:     'center',
+    justifyContent: 'center',
+    marginTop:      2,
+  },
+  pickBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.sm,
+    borderRadius:      radius.md,
+    backgroundColor:   colors.green,
   },
 });
 

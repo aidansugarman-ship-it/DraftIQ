@@ -2,7 +2,6 @@
 // All AI API keys are server-side only — never exposed to the client.
 //
 // Secret setup (run once via Firebase CLI):
-//   firebase functions:secrets:set ANTHROPIC_API_KEY
 //   firebase functions:secrets:set GEMINI_API_KEY
 //   firebase functions:secrets:set YOUTUBE_API_KEY
 

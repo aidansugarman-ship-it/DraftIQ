@@ -29,6 +29,10 @@ import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { canAccess } from '@constants/tiers';
 import { useUserStore } from '@store/useUserStore';
+import { espn, EspnNewsItem } from '@services/espn';
+import { SPORTS, type SportId } from '@constants/sports';
+import { SportSwitcher } from '@components/ui/SportSwitcher';
+import { SportTint } from '@components/shared/SportTint';
 
 // ─── Mock player pool ─────────────────────────────────────────────────────────
 
@@ -391,14 +395,141 @@ function VerdictCard({ verdict }: { verdict: Verdict }) {
 
 type ModalSide = 'giving' | 'receiving' | null;
 
+// ─── Trade signal card (hot/cold movers from news) ────────────────────────────
+
+function TradeSignalCard({ item, sport }: { item: EspnNewsItem; sport: SportId }) {
+  const [aiTake, setAiTake]       = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAI, setShowAI]       = useState(false);
+
+  const handleAsk = useCallback(() => {
+    if (aiTake) {
+      setShowAI((v) => !v);
+      return;
+    }
+    setShowAI(true);
+    setAiLoading(true);
+    const sportLabel = SPORTS[sport].shortLabel;
+    const prompt = `News headline: "${item.headline}". From a fantasy ${sportLabel} trade angle — is the player(s) involved a SELL HIGH (hot), BUY LOW (cold), or HOLD right now? Give the call first, then one-line reasoning.`;
+    // Reuse articleTake — system prompt is already tuned, just routes through ask().
+    gemini.articleTake(prompt, sportLabel)
+      .then(setAiTake)
+      .catch(() => setAiTake('AI take unavailable right now.'))
+      .finally(() => setAiLoading(false));
+  }, [aiTake, item.headline, sport]);
+
+  return (
+    <View style={tradeSignalStyles.card}>
+      <Text variant="bodySmallMedium" color={colors.textPrimary} numberOfLines={2}>
+        {item.headline}
+      </Text>
+      <View style={tradeSignalStyles.cardBottom}>
+        <Text variant="caption" color={colors.textTertiary}>
+          {new Date(item.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </Text>
+        <TouchableOpacity onPress={handleAsk} activeOpacity={0.7} style={tradeSignalStyles.askBtn}>
+          <Ionicons name="flash" size={12} color={colors.green} />
+          <Text variant="labelSmall" style={{ color: colors.green, fontSize: 11 }}>
+            {showAI && aiTake ? 'Hide' : 'Trade angle'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {showAI && (
+        <View style={tradeSignalStyles.aiBox}>
+          {aiLoading
+            ? <Text variant="bodySmall" color={colors.textTertiary}>Thinking…</Text>
+            : <Text variant="bodySmall" color={colors.textSecondary}>{aiTake}</Text>
+          }
+        </View>
+      )}
+    </View>
+  );
+}
+
+const tradeSignalStyles = StyleSheet.create({
+  section: {
+    marginTop:    spacing.lg,
+    marginBottom: spacing.lg,
+    padding:      spacing.base,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth:  1,
+    borderColor:  colors.border,
+  },
+  headerRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.xs,
+  },
+  livePill: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius:    999,
+    backgroundColor: `${colors.green}14`,
+  },
+  liveDot: {
+    width: 5, height: 5, borderRadius: 5,
+    backgroundColor: colors.green,
+  },
+  card: {
+    paddingVertical:   spacing.sm,
+    borderTopWidth:    1,
+    borderTopColor:    colors.border,
+  },
+  cardBottom: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:      6,
+  },
+  askBtn: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical:  4,
+    borderRadius:     radius.sm,
+    backgroundColor:  `${colors.green}14`,
+    borderWidth:      1,
+    borderColor:      `${colors.green}40`,
+  },
+  aiBox: {
+    marginTop:        spacing.xs,
+    padding:          spacing.sm,
+    borderRadius:     radius.sm,
+    backgroundColor:  `${colors.green}0A`,
+    borderLeftWidth:  2,
+    borderLeftColor:  colors.green,
+  },
+});
+
 export default function TradeAnalyzerScreen() {
-  const tier = useUserStore(s => s.tier);
+  const tier         = useUserStore(s => s.tier);
+  const currentSport = useUserStore(s => s.currentSport);
+  const sportLabel   = SPORTS[currentSport].shortLabel;
 
   const [giving,    setGiving]    = useState<TradePlayer[]>([]);
   const [receiving, setReceiving] = useState<TradePlayer[]>([]);
   const [modalSide, setModalSide] = useState<ModalSide>(null);
   const [verdict,   setVerdict]   = useState<Verdict | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+
+  const [signals, setSignals]               = useState<EspnNewsItem[]>([]);
+  const [signalsLoading, setSignalsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSignalsLoading(true);
+    espn.news(currentSport, 6)
+      .then((items) => { if (!cancelled) setSignals(items); })
+      .catch(() => { if (!cancelled) setSignals([]); })
+      .finally(() => { if (!cancelled) setSignalsLoading(false); });
+    return () => { cancelled = true; };
+  }, [currentSport]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -434,7 +565,7 @@ export default function TradeAnalyzerScreen() {
       const aiReasoning = await gemini.tradeAdvice(
         giving.map(p => `${p.name} (${p.position})`),
         receiving.map(p => `${p.name} (${p.position})`),
-        'NFL'
+        sportLabel
       );
       setVerdict({ ...localVerdict, reasoning: aiReasoning });
     } catch {
@@ -449,6 +580,7 @@ export default function TradeAnalyzerScreen() {
 
   return (
     <View style={styles.container}>
+      <SportTint sport={currentSport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
@@ -470,6 +602,31 @@ export default function TradeAnalyzerScreen() {
             <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
               Add players to each side. AI evaluates value, risk, and dynasty implications.
             </Text>
+          </Animated.View>
+
+          {/* Trade signals — hot/cold movers from live news */}
+          <Animated.View style={[tradeSignalStyles.section, heroStyle]}>
+            <View style={tradeSignalStyles.headerRow}>
+              <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1 }}>
+                {sportLabel} TRADE SIGNALS
+              </Text>
+              <View style={tradeSignalStyles.livePill}>
+                <View style={tradeSignalStyles.liveDot} />
+                <Text variant="labelSmall" style={{ color: colors.green, fontSize: 9 }}>LIVE</Text>
+              </View>
+            </View>
+            <Text variant="bodySmall" color={colors.textSecondary} style={{ marginBottom: spacing.sm }}>
+              Tap "Trade angle" on any storyline for an AI buy-low / sell-high read.
+            </Text>
+            {signalsLoading ? (
+              <Text variant="bodySmall" color={colors.textTertiary}>Loading…</Text>
+            ) : signals.length === 0 ? (
+              <Text variant="bodySmall" color={colors.textTertiary}>No live signals right now.</Text>
+            ) : (
+              signals.slice(0, 4).map((item) => (
+                <TradeSignalCard key={item.id} item={item} sport={currentSport} />
+              ))
+            )}
           </Animated.View>
 
           {/* Trade builder */}

@@ -51,13 +51,13 @@ export default function SportScreen() {
 
   const handleContinue = () => {
     setPreferredSports(selected);
-    router.push('/(onboarding)/league-settings');
+    router.push('/(onboarding)/experience');
   };
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={1} totalSteps={5} showBack={false} />
+        <OnboardingProgress step={1} totalSteps={4} showBack={false} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -174,7 +174,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sportEmoji: {
-    fontSize: 40,
+    fontSize:   38,
+    lineHeight: 48,
+    paddingTop: 4,
   },
   seasonBadge: {
     flexDirection:   'row',

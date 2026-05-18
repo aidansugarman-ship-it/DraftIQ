@@ -121,6 +121,7 @@ export default function SignupScreen() {
       await signUpWithEmail(email.trim(), password, name.trim());
       // _layout.tsx onAuthStateChanged handles navigation → onboarding
     } catch (e: any) {
+      console.error('[signup] email sign-up failed:', e.code, e.message, e);
       setError(getFriendlyError(e.code));
     } finally {
       setSubmitting(false);
@@ -218,16 +219,6 @@ export default function SignupScreen() {
 
             {/* Social auth */}
             <View style={styles.socialSection}>
-              {appleAvail && (
-                <AppleAuthentication.AppleAuthenticationButton
-                  buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
-                  buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                  cornerRadius={radius.lg}
-                  style={styles.appleBtn}
-                  onPress={handleAppleSignUp}
-                />
-              )}
-
               <TouchableOpacity
                 style={styles.googleBtn}
                 onPress={handleGoogleSignUp}

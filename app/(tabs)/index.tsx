@@ -24,6 +24,13 @@ import { TIERS } from '@constants/tiers';
 import { SPORTS } from '@constants/sports';
 import { useUserStore } from '@store/useUserStore';
 import { sleeper, SleeperPlayer, TrendingPlayer } from '@services/sleeper';
+import { espn, EspnNewsItem } from '@services/espn';
+import { SportSwitcher } from '@components/ui/SportSwitcher';
+import type { SportId } from '@constants/sports';
+import { useMyRoster } from '@hooks/useMyRoster';
+import { SportTint } from '@components/shared/SportTint';
+import { TeamLogo } from '@components/shared/TeamLogo';
+import { PlayerAvatar } from '@components/shared/PlayerAvatar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +74,70 @@ const MOCK_ALERTS = [
 ];
 
 const FANTASY_POS = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
+
+// ─── Per-sport alerts hook (top injuries) ────────────────────────────────────
+
+interface LiveAlert {
+  id:     string;
+  emoji:  string;
+  title:  string;
+  body:   string;
+  accent: string;
+}
+
+function useLiveAlerts(sport: SportId) {
+  const [alerts, setAlerts]   = useState<LiveAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    espn.injuries(sport)
+      .then((items) => {
+        if (cancelled) return;
+        // Surface the 3 most severe / most recent injuries as alerts
+        const top = items
+          .filter(i => i.athlete && i.status)
+          .slice(0, 3)
+          .map((i): LiveAlert => {
+            const status = i.status.toUpperCase();
+            const isOut = /^(OUT|IR|DOUBT)/i.test(status);
+            return {
+              id:     `${i.athlete.id}-${i.id}`,
+              emoji:  isOut ? '🚨' : '⚠️',
+              title:  `${i.athlete.fullName} — ${status}`,
+              body:   i.shortComment || i.details?.detail || `${i.details?.location ?? ''} ${i.details?.type ?? ''}`.trim() || i.type,
+              accent: isOut ? colors.coral : colors.gold,
+            };
+          });
+        setAlerts(top);
+      })
+      .catch(() => setAlerts([]))
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [sport]);
+
+  return { alerts, loading };
+}
+
+// ─── Per-sport news hook ──────────────────────────────────────────────────────
+
+function useSportNews(sport: SportId) {
+  const [items, setItems]     = useState<EspnNewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    espn.news(sport, 5)
+      .then((articles) => { if (!cancelled) setItems(articles); })
+      .catch(() => { if (!cancelled) setItems([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [sport]);
+
+  return { items, loading };
+}
 
 // ─── Live trending hook ───────────────────────────────────────────────────────
 
@@ -268,7 +339,11 @@ function getGreeting() {
 export default function HomeScreen() {
   const user = useUserStore((s) => s.user);
   const tier = useUserStore((s) => s.tier);
+  const sportForData = useUserStore((s) => s.currentSport);
   const { players: trendPlayers, loading: trendLoading } = useLiveTrending();
+  const { items: newsItems,      loading: newsLoading  } = useSportNews(sportForData);
+  const { alerts: liveAlerts,    loading: alertsLoading } = useLiveAlerts(sportForData);
+  const { roster: myRoster, hasLeague, loading: rosterLoading } = useMyRoster();
 
   const heroOp = useSharedValue(0);
   const heroTy = useSharedValue(12);
@@ -283,12 +358,13 @@ export default function HomeScreen() {
 
   const greeting  = getGreeting();
   const firstName = user?.displayName?.split(' ')[0] ?? 'GM';
-  const sport     = user?.primarySport ?? 'nfl';
+  const sport     = useUserStore((s) => s.currentSport);
   const sportDef  = SPORTS[sport];
   const league    = user?.leagueSettings;
 
   return (
     <View style={styles.container}>
+      <SportTint sport={sportForData} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -307,10 +383,10 @@ export default function HomeScreen() {
                 <TierBadge tier={tier} />
                 <TouchableOpacity
                   style={styles.notifBtn}
-                  onPress={() => router.push('/ask-ai')}
+                  onPress={() => router.push('/(tabs)/profile')}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="flash" size={18} color={colors.green} />
+                  <Ionicons name="person-outline" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -354,44 +430,155 @@ export default function HomeScreen() {
               delay={250}
             />
             <QuickAction
-              emoji="🤖"
-              label="Ask AI"
+              emoji="↔️"
+              label="Trade"
               accent={colors.purple}
-              onPress={() => router.push('/ask-ai')}
+              onPress={() => router.push('/trade')}
               delay={325}
             />
           </View>
 
-          {/* ── Alerts ──────────────────────────────────────────────────── */}
-          <SectionHeader label="ALERTS" action="See all" onAction={() => {}} />
+          {/* ── My Roster (if league connected) ─────────────────────────── */}
+          {hasLeague && myRoster && (
+            <>
+              <SectionHeader
+                label={`MY TEAM · ${myRoster.teamName.toUpperCase()}`}
+                action="Full team →"
+                onAction={() => router.push('/roster')}
+              />
+              <View style={rosterStyles.card}>
+                <View style={rosterStyles.headerRow}>
+                  <Text variant="bodyMedium" color={colors.textPrimary}>{myRoster.leagueName}</Text>
+                  <Text variant="caption" color={colors.textTertiary}>
+                    {myRoster.record.wins}-{myRoster.record.losses}{myRoster.record.ties ? `-${myRoster.record.ties}` : ''}
+                  </Text>
+                </View>
+                {myRoster.players.filter(p => p.isStarter).slice(0, 6).map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={rosterStyles.row}
+                    onPress={() => router.push(`/player?id=${p.id}`)}
+                    activeOpacity={0.7}
+                  >
+                    <PlayerAvatar sport={sportForData} id={p.id} name={p.name} size={32} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text variant="bodySmallMedium" color={colors.textPrimary} numberOfLines={1}>
+                        {p.position} · {p.name}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <TeamLogo sport={sportForData} team={p.team} size={12} />
+                        <Text variant="caption" color={colors.textTertiary}>
+                          {p.team}{p.injury ? ` · ${p.injury.status}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    {p.injury && <View style={[rosterStyles.injuryDot, { backgroundColor: colors.coral }]} />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
+          {!hasLeague && sport === 'nfl' && (
+            <TouchableOpacity
+              style={connectCta.wrap}
+              onPress={() => router.push('/settings/connect-sleeper')}
+              activeOpacity={0.85}
+            >
+              <View style={connectCta.iconBubble}>
+                <Ionicons name="link" size={20} color={colors.green} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyMedium" color={colors.textPrimary}>Connect your Sleeper league</Text>
+                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                  Pull your real roster — every AI take becomes about YOUR players. (NFL only.)
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+
+          {/* ── Alerts (live per sport) ──────────────────────────────────── */}
+          <SectionHeader label={`${sportDef.shortLabel} ALERTS`} action="See all" onAction={() => router.push('/injuries')} live />
           <View style={styles.alertList}>
-            {MOCK_ALERTS.map((a, i) => (
-              <AlertCard key={a.id} {...a} delay={200 + i * 80} />
-            ))}
+            {alertsLoading ? (
+              <Text variant="bodySmall" color={colors.textTertiary} style={{ padding: spacing.md }}>
+                Loading {sportDef.shortLabel} alerts…
+              </Text>
+            ) : liveAlerts.length === 0 ? (
+              <Text variant="bodySmall" color={colors.textTertiary} style={{ padding: spacing.md }}>
+                No active {sportDef.shortLabel} alerts.
+              </Text>
+            ) : (
+              liveAlerts.map((a, i) => (
+                <AlertCard key={a.id} {...a} time="Live" type="injury" delay={200 + i * 80} />
+              ))
+            )}
           </View>
 
-          {/* ── Trending ────────────────────────────────────────────────── */}
+          {/* ── Today's news (per-sport) ──────────────────────────────────── */}
           <SectionHeader
-            label="TRENDING ADDS"
-            action="Full wire →"
+            label={`${sportDef.shortLabel} HEADLINES`}
+            action="More →"
             onAction={() => router.push('/add-drop')}
             live
           />
           <View style={styles.trendCard}>
-            {trendLoading ? (
-              <TrendingSkeleton />
-            ) : trendPlayers.length > 0 ? (
-              trendPlayers.map((p, i) => (
-                <TrendingRow key={p.id} item={p} delay={350 + i * 60} />
+            {newsLoading ? (
+              <View style={styles.trendEmpty}>
+                <Text variant="bodySmall" color={colors.textTertiary} align="center">
+                  Loading {sportDef.shortLabel} news…
+                </Text>
+              </View>
+            ) : newsItems.length > 0 ? (
+              newsItems.slice(0, 4).map((n) => (
+                <View key={n.id} style={newsRowStyles.row}>
+                  <Text style={newsRowStyles.emoji}>{sportDef.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodySmallMedium" color={colors.textPrimary} numberOfLines={2}>
+                      {n.headline}
+                    </Text>
+                    <Text variant="caption" color={colors.textTertiary} style={{ marginTop: 2 }}>
+                      {new Date(n.published).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </Text>
+                  </View>
+                </View>
               ))
             ) : (
               <View style={styles.trendEmpty}>
                 <Text variant="bodySmall" color={colors.textTertiary} align="center">
-                  Could not load trending data.
+                  No {sportDef.shortLabel} news available right now.
                 </Text>
               </View>
             )}
           </View>
+
+          {/* ── Trending (NFL only — Sleeper data) ───────────────────────── */}
+          {sport === 'nfl' && (
+            <>
+              <SectionHeader
+                label="TRENDING ADDS"
+                action="Full wire →"
+                onAction={() => router.push('/add-drop')}
+                live
+              />
+              <View style={styles.trendCard}>
+                {trendLoading ? (
+                  <TrendingSkeleton />
+                ) : trendPlayers.length > 0 ? (
+                  trendPlayers.map((p, i) => (
+                    <TrendingRow key={p.id} item={p} delay={350 + i * 60} />
+                  ))
+                ) : (
+                  <View style={styles.trendEmpty}>
+                    <Text variant="bodySmall" color={colors.textTertiary} align="center">
+                      Could not load trending data.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
 
           {/* ── GM Report upsell (non-GM) ────────────────────────────────── */}
           {tier !== 'gm' && (
@@ -409,7 +596,7 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium" color={colors.gold}>Unlock GM Mode</Text>
                   <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                    Weekly AI team reports, live draft companion, unlimited waiver alerts.
+                    Weekly AI team reports, season-long pickup intel, unlimited waiver alerts.
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.gold} />
@@ -598,6 +785,77 @@ const trendStyles = StyleSheet.create({
     backgroundColor:  `${colors.green}14`,
     borderWidth:       1,
     borderColor:       `${colors.green}30`,
+  },
+});
+
+const rosterStyles = StyleSheet.create({
+  card: {
+    backgroundColor:  colors.surface,
+    borderRadius:     radius.lg,
+    borderWidth:      1,
+    borderColor:      colors.border,
+    padding:          spacing.base,
+    marginBottom:     spacing.md,
+  },
+  headerRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   spacing.sm,
+    paddingBottom:  spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  row: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    gap:              spacing.sm,
+    paddingVertical:  spacing.xs,
+  },
+  posTag: {
+    width:            36,
+    paddingVertical:  3,
+    borderRadius:     radius.sm,
+    backgroundColor:  colors.background,
+    alignItems:       'center',
+  },
+  injuryDot: {
+    width:  8, height: 8, borderRadius: 4,
+  },
+});
+
+const connectCta = StyleSheet.create({
+  wrap: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    padding:         spacing.base,
+    backgroundColor: `${colors.green}10`,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     `${colors.green}40`,
+    marginBottom:    spacing.md,
+  },
+  iconBubble: {
+    width:           40, height: 40, borderRadius: 20,
+    backgroundColor: `${colors.green}24`,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+});
+
+const newsRowStyles = StyleSheet.create({
+  row: {
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    gap:             spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  emoji: {
+    fontSize: 18,
+    marginTop: 1,
   },
 });
 

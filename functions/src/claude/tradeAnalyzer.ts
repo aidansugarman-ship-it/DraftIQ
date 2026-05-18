@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaude } from '../utils/claudeClient';
 import { hashString } from '../utils/firestoreCache';
 
@@ -24,7 +24,7 @@ interface TradeAnalyzerRequest {
 }
 
 export const analyzeTradeValue = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: TradeAnalyzerRequest) => {
     const formatPlayer = (p: TradePlayer) =>
       `${p.name} (${p.position}, ${p.team}) — Age ${p.age}, Fantasy Score ${p.fantasyScore}/100, Status: ${p.injuryStatus}${p.contractYear ? ', CONTRACT YEAR' : ''}${p.recentNews ? `, News: ${p.recentNews}` : ''}`;

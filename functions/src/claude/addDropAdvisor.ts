@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaude } from '../utils/claudeClient';
 
 interface RosterPlayer {
@@ -30,7 +30,7 @@ interface AddDropRequest {
 }
 
 export const getAddDropRecommendations = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: AddDropRequest) => {
     const maxRecs = data.tier === 'gm' ? 10 : 5;
 

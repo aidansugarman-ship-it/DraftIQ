@@ -1,8 +1,10 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+// @ts-expect-error — getReactNativePersistence is exported from firebase/auth but not in its public types
+import { getAuth, initializeAuth, getReactNativePersistence, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { getFunctions, type Functions } from 'firebase/functions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey:            process.env.EXPO_PUBLIC_FIREBASE_API_KEY            ?? 'placeholder-key',
@@ -13,9 +15,14 @@ const firebaseConfig = {
   appId:             process.env.EXPO_PUBLIC_FIREBASE_APP_ID             ?? '1:000000000000:web:placeholder',
 };
 
-const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const isFreshApp = getApps().length === 0;
+const app: FirebaseApp = isFreshApp ? initializeApp(firebaseConfig) : getApp();
 
-export const auth: Auth               = getAuth(app);
+// Use AsyncStorage so auth state persists across app restarts.
+// `initializeAuth` must run only once per app instance — subsequent reads use `getAuth`.
+export const auth: Auth = isFreshApp
+  ? initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })
+  : getAuth(app);
 export const db: Firestore            = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
 export const functions: Functions     = getFunctions(app);

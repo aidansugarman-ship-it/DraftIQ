@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v1';
 import { callClaudeConversation } from '../utils/claudeClient';
 
 interface WarRoomUpdate {
@@ -26,7 +26,7 @@ interface WarRoomUpdate {
 
 // GM-tier only: real-time AI commentary during a live draft
 export const getWarRoomUpdate = functions
-  .runWith({ secrets: ['ANTHROPIC_API_KEY'] })
+  .runWith({ secrets: ['GEMINI_API_KEY'] })
   .https.onCall(async (data: WarRoomUpdate) => {
     const picksUntilUser = data.userPickNumber - data.currentPick;
 
