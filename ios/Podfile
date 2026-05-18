@@ -1,0 +1,207 @@
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+require 'json'
+podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
+
+def ccache_enabled?(podfile_properties)
+  # Environment variable takes precedence
+  return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
+  
+  # Fall back to Podfile properties
+  podfile_properties['apple.ccacheEnabled'] == 'true'
+end
+
+ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == 'false'
+ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
+ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
+platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
+
+prepare_react_native_project!
+
+target 'DraftIQ' do
+  use_expo_modules!
+
+  if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+  else
+    config_command = [
+      'node',
+      '--no-warnings',
+      '--eval',
+      'require(\'expo/bin/autolinking\')',
+      'expo-modules-autolinking',
+      'react-native-config',
+      '--json',
+      '--platform',
+      'ios'
+    ]
+  end
+
+  config = use_native_modules!(config_command)
+
+  use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
+  use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
+
+  # Force a few troublesome pods to build as static libraries even when use_frameworks! is set.
+  # RCT-Folly's `<folly/X.h>` includes break inside frameworks mode.
+  # boost / DoubleConversion / glog / fmt have similar nested-include issues.
+  pre_install do |installer|
+    %w[RCT-Folly boost DoubleConversion glog fmt].each do |name|
+      pod = installer.pod_targets.find { |p| p.name == name }
+      next unless pod
+      def pod.build_type
+        Pod::BuildType.static_library
+      end
+    end
+  end
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
+    :fabric_enabled => false,
+    :new_arch_enabled => false,
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
+  )
+
+  post_install do |installer|
+
+  # Fix: fmt consteval compile error under Xcode 16 / RN 0.77
+  # Patch the fmt header to disable consteval which breaks Clang 16
+  Dir.glob(File.join(installer.sandbox.root, '**', 'core.h')).each do |file|
+    next unless file.include?('/fmt/')
+    content = File.read(file)
+    if content.include?('FMT_CONSTEVAL consteval')
+      content.gsub!('define FMT_CONSTEVAL consteval', 'define FMT_CONSTEVAL ')
+      File.write(file, content)
+    end
+  end
+  Dir.glob(File.join(installer.sandbox.root, '**', 'base.h')).each do |file|
+    next unless file.include?('/fmt/')
+    content = File.read(file)
+    if content.include?('FMT_CONSTEVAL consteval')
+      content.gsub!('define FMT_CONSTEVAL consteval', 'define FMT_CONSTEVAL ')
+      File.write(file, content)
+    end
+  end
+
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      :ccache_enabled => ccache_enabled?(podfile_properties),
+    )
+
+    # Force every pod to use the project's minimum iOS deployment target.
+    # Fixes "deployment version mismatch" warnings from older pods (GoogleSignIn, AppAuth, GTM*).
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+        # Allow framework modules to #include <react/performance/timeline/...> across pods.
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        # Prevent clang from auto-promoting #include <X/Y.h> to framework lookups when X.framework exists.
+        # Forces fallthrough to HEADER_SEARCH_PATHS, which is where our actual headers live.
+        config.build_settings['HEADERMAP_INCLUDES_FRAMEWORK_ENTRIES'] = 'NO'
+        config.build_settings['HEADERMAP_INCLUDES_NONPUBLIC_NONPRIVATE_HEADERS'] = 'NO'
+
+        # Add the React Native ReactCommon dir + RCT-Folly to every pod's header search paths.
+        # Required for RN 0.76 + static frameworks: pods that transitively include
+        # React-runtimescheduler need <react/performance/timeline/X.h> resolvable, and any
+        # pod that pulls in folly needs <folly/X.h> resolvable.
+        # Force-add every needed C++ header path. Use exact string matching (not substring)
+        # so we don't get fooled by "Headers/Public/RCT-Folly" already being there.
+        existing = config.build_settings['HEADER_SEARCH_PATHS'].to_s
+        # Force-add a comprehensive set of C++/RN header paths. Plays it safe — paths that don't
+        # match nothing waste nothing; missing ones cause whack-a-mole build errors.
+        rn_common = '"$(PODS_ROOT)/../../node_modules/react-native/ReactCommon"'
+        force_paths = [
+          # Vendored C++ libs
+          '"$(PODS_ROOT)/RCT-Folly"',
+          '"$(PODS_ROOT)/boost"',
+          '"$(PODS_ROOT)/DoubleConversion"',
+          '"$(PODS_ROOT)/fmt/include"',
+          '"$(PODS_ROOT)/glog"',
+          # CocoaPods generated header roots
+          '"$(PODS_ROOT)/Headers/Public"',
+          '"$(PODS_ROOT)/Headers/Public/glog"',
+          '"$(PODS_ROOT)/Headers/Public/folly"',
+          '"$(PODS_ROOT)/Headers/Public/RCT-Folly"',
+          '"$(PODS_ROOT)/Headers/Public/FBLazyVector"',
+          '"$(PODS_ROOT)/Headers/Public/RCTRequired"',
+          '"$(PODS_ROOT)/Headers/Public/React-runtimeexecutor"',
+          '"$(PODS_ROOT)/Headers/Public/React-callinvoker"',
+          '"$(PODS_ROOT)/Headers/Public/React-timing"',
+          '"$(PODS_ROOT)/Headers/Public/React-jsi"',
+          '"$(PODS_ROOT)/Headers/Public/ReactCommon"',
+          '"$(PODS_ROOT)/Headers/Public/hermes-engine"',
+          '"$(PODS_ROOT)/hermes-engine/destroot/include"',
+          # React Native ReactCommon source roots
+          rn_common,
+          "#{rn_common[0..-2]}/yoga\"",
+          "#{rn_common[0..-2]}/jsi\"",
+          "#{rn_common[0..-2]}/cxxreact\"",
+          "#{rn_common[0..-2]}/callinvoker\"",
+          "#{rn_common[0..-2]}/runtimeexecutor\"",
+          "#{rn_common[0..-2]}/hermes\"",
+          "#{rn_common[0..-2]}/jsinspector-modern\"",
+          "#{rn_common[0..-2]}/logger\"",
+          "#{rn_common[0..-2]}/reactperflogger\"",
+          "#{rn_common[0..-2]}/jserrorhandler\"",
+          "#{rn_common[0..-2]}/jsiexecutor\"",
+          "#{rn_common[0..-2]}/react/nativemodule/core\"",
+          # iOS platform-specific implementations (HostPlatformColor, HostPlatformViewProps)
+          "#{rn_common[0..-2]}/react/renderer/graphics/platform/ios\"",
+          "#{rn_common[0..-2]}/react/renderer/components/view/platform/cxx\"",
+          "#{rn_common[0..-2]}/react/renderer/textlayoutmanager/platform/ios\"",
+          "#{rn_common[0..-2]}/react/renderer/components/textinput/platform/ios\"",
+          "#{rn_common[0..-2]}/react/renderer/imagemanager/platform/ios\"",
+          # Codegen output for 3rd-party fabric components (safe-area, screens, etc.)
+          '"$(PODS_ROOT)/../build/generated/ios"',
+          # Framework-wrapped React headers needed by 3rd-party Fabric components
+          '"$(PODS_CONFIGURATION_BUILD_DIR)/React-RCTFabric/RCTFabric.framework/Headers"',
+          '"$(PODS_CONFIGURATION_BUILD_DIR)/React-Core/React.framework/Headers"',
+          '"$(PODS_CONFIGURATION_BUILD_DIR)/React-Fabric/React_Fabric.framework/Headers"',
+          '"$(PODS_CONFIGURATION_BUILD_DIR)/React-FabricComponents/React_FabricComponents.framework/Headers"',
+          # react-native-reanimated worklets + iOS roots
+          '"$(PODS_ROOT)/../../node_modules/react-native-reanimated/Common/cpp"',
+          '"$(PODS_ROOT)/../../node_modules/react-native-reanimated/Common/cpp/worklets"',
+          '"$(PODS_ROOT)/../../node_modules/react-native-reanimated/Common/cpp/reanimated"',
+          '"$(PODS_ROOT)/../../node_modules/react-native-reanimated/apple"',
+          # Other 3rd-party native packages that may have nested include patterns
+          '"$(PODS_ROOT)/../../node_modules/react-native-screens/common/cpp"',
+          '"$(PODS_ROOT)/../../node_modules/react-native-gesture-handler/apple"',
+          '"$(PODS_ROOT)/../../node_modules/react-native-svg/apple"',
+        ]
+        extras = force_paths.reject { |p| existing.include?(p) }
+
+        unless extras.empty?
+          base = existing.empty? ? '$(inherited)' : existing
+          config.build_settings['HEADER_SEARCH_PATHS'] = "#{base} #{extras.join(' ')}"
+        end
+      end
+    end
+
+    # Directly modify xcconfig files for pods that need TurboModule paths.
+    # post_install build_settings don't always propagate to xcconfig.
+    paths_to_add = [
+      '"$(PODS_ROOT)/../../node_modules/react-native/ReactCommon/react/nativemodule/core"',
+      '"$(PODS_ROOT)/../../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"',
+      # Root path so <ReactCommon/RCTTurboModule.h> resolves to our proxy headers in node_modules/react-native/ReactCommon/
+      '"$(PODS_ROOT)/../../node_modules/react-native"',
+    ]
+    Dir.glob(File.join(installer.sandbox.root, 'Target Support Files', '*', '*.xcconfig')).each do |xc_file|
+      next if xc_file.include?('ExpoModulesCore')
+      content = File.read(xc_file)
+      next unless content.include?('HEADER_SEARCH_PATHS')
+      missing = paths_to_add.reject { |p| content.include?(p) }
+      next if missing.empty?
+      content = content.gsub(/(HEADER_SEARCH_PATHS = [^\n]+)/) do |m|
+        "#{m} #{missing.join(' ')}"
+      end
+      File.write(xc_file, content)
+    end
+  end
+end

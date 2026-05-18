@@ -1,0 +1,34 @@
+diff --git a/node_modules/expo-dev-menu/ios/DevMenuViewController.swift b/node_modules/expo-dev-menu/ios/DevMenuViewController.swift
+index 5d58874..78d2171 100644
+--- a/node_modules/expo-dev-menu/ios/DevMenuViewController.swift
++++ b/node_modules/expo-dev-menu/ios/DevMenuViewController.swift
+@@ -63,7 +63,11 @@ class DevMenuViewController: UIViewController {
+   // MARK: private
+ 
+   private func initialProps() -> [String: Any] {
+-    let isSimulator = TARGET_IPHONE_SIMULATOR > 0
++    #if targetEnvironment(simulator)
++    let isSimulator = true
++    #else
++    let isSimulator = false
++    #endif
+ 
+     return [
+       "showOnboardingView": manager.shouldShowOnboarding(),
+diff --git a/node_modules/expo-dev-menu/ios/ReactNativeCompatibles/ReactNative/DevClientAppDelegate.mm b/node_modules/expo-dev-menu/ios/ReactNativeCompatibles/ReactNative/DevClientAppDelegate.mm
+index 0cc9455..92449ad 100644
+--- a/node_modules/expo-dev-menu/ios/ReactNativeCompatibles/ReactNative/DevClientAppDelegate.mm
++++ b/node_modules/expo-dev-menu/ios/ReactNativeCompatibles/ReactNative/DevClientAppDelegate.mm
+@@ -17,9 +17,9 @@
+ #import <React/CoreModulesPlugins.h>
+ #import <React/RCTSurfacePresenter.h>
+ #import <React/RCTSurfacePresenterBridgeAdapter.h>
+-#import <ReactCommon/RCTContextContainerHandling.h>
+-#import <ReactCommon/RCTHost.h>
+-#import <ReactCommon/RCTTurboModuleManager.h>
++#import <react/runtime/platform/ios/ReactCommon/RCTContextContainerHandling.h>
++#import <react/runtime/platform/ios/ReactCommon/RCTHost.h>
++#import <react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModuleManager.h>
+ #import <react/config/ReactNativeConfig.h>
+ 
+ #import <react/renderer/runtimescheduler/RuntimeScheduler.h>
