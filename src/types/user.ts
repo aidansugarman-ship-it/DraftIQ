@@ -16,6 +16,8 @@ export interface UserProfile {
   leagueSettings?: LeagueSettings;
   archetype?: TeamArchetype;
   experienceLevel?: 'beginner' | 'experienced';
+  teamStyle?: 'winNow' | 'futureStars' | 'balanced' | 'starsScrubs';
+  favoritePlayerIds?: string[];  // hearted players for personalized feed
   gmBadge: boolean;
   pushToken?: string;
   sleeperUsername?: string;

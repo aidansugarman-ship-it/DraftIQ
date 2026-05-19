@@ -105,6 +105,30 @@ export const espn = {
     return (data.sports?.[0]?.leagues?.[0]?.teams ?? []).map(t => t.team);
   },
 
+  /**
+   * Stat leaders for a sport — real top performers by category.
+   * NBA/NFL: points, NBA: assists/rebounds, MLB: HR/AVG/ERA, NHL: goals/assists/saves.
+   */
+  async leaders(sport: SportId): Promise<Array<{
+    categoryName: string;
+    leaders: Array<{ athlete: EspnAthlete; value: number; displayValue: string }>;
+  }>> {
+    const { sport: s, league: l } = ESPN_PATH[sport];
+    try {
+      const data = await get<{ categories?: Array<any> }>(`/${s}/${l}/athletes/leaders`);
+      return (data.categories ?? []).map((cat: any) => ({
+        categoryName: cat.displayName || cat.name || 'Stat',
+        leaders: (cat.leaders ?? []).slice(0, 10).map((l: any) => ({
+          athlete: l.athlete,
+          value:   l.value ?? 0,
+          displayValue: l.displayValue ?? String(l.value ?? ''),
+        })),
+      })).filter(c => c.leaders.length > 0).slice(0, 8);
+    } catch {
+      return [];
+    }
+  },
+
   /** Single athlete by ESPN id — for player detail pages. */
   async athlete(sport: SportId, id: string): Promise<EspnAthlete | null> {
     const { sport: s, league: l } = ESPN_PATH[sport];

@@ -26,6 +26,7 @@ import { useUserStore } from '@store/useUserStore';
 import { SPORTS, type SportId } from '@constants/sports';
 import { sleeper } from '@services/sleeper';
 import { espn } from '@services/espn';
+import { JargonTip, JARGON } from '@components/ui/JargonTip';
 import { canAccess } from '@constants/tiers';
 import { gemini } from '@services/gemini';
 import { useGeminiTake } from '@hooks/useGeminiTake';
@@ -149,11 +150,17 @@ function ScoreGauge({ score }: { score: number }) {
 
 // ─── Stat Pill ────────────────────────────────────────────────────────────────
 
-function StatPill({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function StatPill({ label, value, accent, definition }: { label: string; value: string; accent?: string; definition?: string }) {
   return (
     <View style={statStyles.pill}>
       <Text style={[statStyles.value, { color: accent ?? colors.textPrimary }]}>{value}</Text>
-      <Text variant="caption" color={colors.textTertiary}>{label}</Text>
+      {definition ? (
+        <JargonTip term={label} definition={definition}>
+          <Text variant="caption" color={colors.textTertiary}>{label}</Text>
+        </JargonTip>
+      ) : (
+        <Text variant="caption" color={colors.textTertiary}>{label}</Text>
+      )}
     </View>
   );
 }
@@ -240,14 +247,31 @@ function NewsCard({ item }: { item: typeof MOCK_PLAYER.recentNews[number] }) {
 type Tab = 'analysis' | 'stats' | 'schedule' | 'news';
 
 export default function PlayerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // Callers can pass full player info via URL params so we never have to fall back to MOCK_PLAYER.
+  const { id, name, team, pos } = useLocalSearchParams<{
+    id:    string;
+    name?: string;
+    team?: string;
+    pos?:  string;
+  }>();
   const tier        = useUserStore((s) => s.tier);
   const currentSport = useUserStore((s) => s.currentSport);
   const sportLabel  = SPORTS[currentSport].shortLabel;
   const [activeTab, setActiveTab] = useState<Tab>('analysis');
 
-  // Fetch real player metadata — Sleeper for NFL, ESPN for others.
-  const [realMeta, setRealMeta] = useState<Partial<typeof MOCK_PLAYER> | null>(null);
+  // Seed with anything the caller passed — beats showing Josh Allen as a fallback.
+  const seededMeta: Partial<typeof MOCK_PLAYER> | null = (name || team || pos) ? {
+    id:         id ?? 'unknown',
+    name:       name ?? 'Unknown player',
+    firstName:  name?.split(' ')[0],
+    lastName:   name?.split(' ').slice(1).join(' '),
+    team:       team ?? 'FA',
+    teamAbbrev: team ?? 'FA',
+    position:   pos ?? '—',
+  } : null;
+
+  // Fetch real player metadata — Sleeper for NFL, ESPN for others. Falls back to URL params.
+  const [realMeta, setRealMeta] = useState<Partial<typeof MOCK_PLAYER> | null>(seededMeta);
   useEffect(() => {
     let cancelled = false;
     if (!id) { setRealMeta(null); return; }
@@ -378,10 +402,10 @@ export default function PlayerScreen() {
 
             {/* Quick stats row */}
             <View style={styles.statsRow}>
-              <StatPill label="ADP" value={String(player.adp)} />
-              <StatPill label="OWNED" value={`${player.ownership}%`} accent={colors.blue} />
-              <StatPill label="TEAM TOTAL" value={String(player.impliedTeamTotal)} accent={colors.gold} />
-              <StatPill label="O/U" value={String(player.gameOverUnder)} />
+              <StatPill label="ADP" value={String(player.adp)} definition={JARGON.ADP} />
+              <StatPill label="OWNED" value={`${player.ownership}%`} accent={colors.blue} definition="Percentage of fantasy leagues where this player is on a roster. 95%+ means almost everyone owns them; under 20% means they're widely available on the waiver wire." />
+              <StatPill label="TEAM TOTAL" value={String(player.impliedTeamTotal)} accent={colors.gold} definition="Vegas-implied points the player's team will score this game. Higher = better scoring environment for fantasy. 25+ is great, under 18 is a bad spot." />
+              <StatPill label="O/U" value={String(player.gameOverUnder)} definition="The over/under: Vegas-projected total points for both teams combined. High O/U (50+) means lots of expected scoring, good for fantasy. Low O/U (under 40) suggests a defensive struggle." />
             </View>
           </View>
 

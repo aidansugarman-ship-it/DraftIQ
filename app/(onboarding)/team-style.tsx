@@ -16,43 +16,31 @@ import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useOnboardingStore } from '@store/useOnboardingStore';
 
-type Level = 'beginner' | 'experienced';
+type Style = 'winNow' | 'futureStars' | 'balanced' | 'starsScrubs';
 
 const OPTIONS: Array<{
-  id:      Level;
-  label:   string;
-  tagline: string;
-  desc:    string;
-  emoji:   string;
+  id:    Style;
+  label: string;
+  desc:  string;
+  emoji: string;
+  color: string;
 }> = [
-  {
-    id:      'beginner',
-    label:   'Just getting into fantasy',
-    tagline: 'Walk me through it',
-    desc:    'The app explains positions, scoring, strategy, and walks you through every decision. AI takes are longer and beginner-friendly.',
-    emoji:   '🌱',
-  },
-  {
-    id:      'experienced',
-    label:   "I've done this before",
-    tagline: 'Cut to the chase',
-    desc:    'Skip the basics. AI calls are sharp and assume you know terms like ADP, target share, BABIP, xG. Get the takes, not the textbook.',
-    emoji:   '🎯',
-  },
+  { id: 'winNow',      label: 'Win Now',         desc: 'Proven vets. Title window is open. Trade picks for points.',           emoji: '🏆', color: colors.gold },
+  { id: 'futureStars', label: 'Future Stars',    desc: 'Young talent. Patience pays. Building for next year and beyond.',     emoji: '🌱', color: colors.green },
+  { id: 'balanced',    label: 'Balanced',        desc: 'Mix of vets and upside. Compete every year. No extreme bets.',         emoji: '⚖️', color: colors.blue },
+  { id: 'starsScrubs', label: 'Stars & Scrubs',  desc: 'Top-heavy. Pay up for elites. Fill the bottom with hot waiver adds.',  emoji: '💎', color: colors.purple },
 ];
 
-export default function ExperienceScreen() {
-  const { experienceLevel, setExperienceLevel } = useOnboardingStore();
-  const [selected, setSelected] = useState<Level | null>(experienceLevel);
+export default function TeamStyleScreen() {
+  const { teamStyle, setTeamStyle } = useOnboardingStore();
+  const [selected, setSelected] = useState<Style | null>(teamStyle);
 
   const heroOpacity = useSharedValue(0);
   const heroY       = useSharedValue(16);
-
   useEffect(() => {
     heroOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) });
     heroY.value       = withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) });
   }, []);
-
   const heroStyle = useAnimatedStyle(() => ({
     opacity:   heroOpacity.value,
     transform: [{ translateY: heroY.value }],
@@ -60,23 +48,20 @@ export default function ExperienceScreen() {
 
   const handleContinue = () => {
     if (!selected) return;
-    setExperienceLevel(selected);
-    router.push('/(onboarding)/team-style');
+    setTeamStyle(selected);
+    router.push('/(onboarding)/league-settings');
   };
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={2} totalSteps={5} showBack onBack={() => router.back()} />
+        <OnboardingProgress step={3} totalSteps={5} showBack onBack={() => router.back()} />
 
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Animated.View style={[styles.header, heroStyle]}>
-            <Text style={styles.title}>HOW MUCH{'\n'}FANTASY{'\n'}HAVE YOU PLAYED?</Text>
+            <Text style={styles.title}>WHAT'S YOUR{'\n'}FANTASY STYLE?</Text>
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.subtitle}>
-              We'll tune the app and the AI to match. You can change this later.
+              Tunes every take to your roster philosophy. Change anytime.
             </Text>
           </Animated.View>
 
@@ -86,15 +71,15 @@ export default function ExperienceScreen() {
                 key={opt.id}
                 selected={selected === opt.id}
                 onPress={() => setSelected(opt.id)}
+                accentColor={opt.color}
                 style={styles.card}
               >
                 <View style={styles.cardHeader}>
-                  <Text style={styles.emoji}>{opt.emoji}</Text>
+                  <View style={[styles.emojiBubble, { backgroundColor: `${opt.color}18` }]}>
+                    <Text style={styles.emoji}>{opt.emoji}</Text>
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text variant="bodyMedium" color={colors.textPrimary}>{opt.label}</Text>
-                    <Text variant="caption" color={colors.green} style={styles.tagline}>
-                      {opt.tagline.toUpperCase()}
-                    </Text>
                   </View>
                 </View>
                 <Text variant="bodySmall" color={colors.textSecondary} style={styles.desc}>
@@ -118,42 +103,14 @@ export default function ExperienceScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   safe:      { flex: 1 },
-  scroll: {
-    paddingHorizontal: spacing.base,
-    paddingBottom:     120,
-  },
-  header: {
-    marginTop:    spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  title: {
-    ...typography.heroSmall,
-    color:        colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    lineHeight: 22,
-  },
-  list: {
-    gap: spacing.md,
-  },
-  card: {
-    padding: spacing.base,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           spacing.md,
-    marginBottom:  spacing.sm,
-  },
-  emoji: {
-    fontSize: 32,
-  },
-  tagline: {
-    letterSpacing: 0.8,
-    marginTop:     2,
-  },
-  desc: {
-    lineHeight: 19,
-  },
+  scroll:    { paddingHorizontal: spacing.base, paddingBottom: 120 },
+  header:    { marginTop: spacing.lg, marginBottom: spacing.xl },
+  title:     { ...typography.heroSmall, color: colors.textPrimary, marginBottom: spacing.sm },
+  subtitle:  { lineHeight: 22 },
+  list:      { gap: spacing.md },
+  card:      { padding: spacing.base },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  emojiBubble: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  emoji:     { fontSize: 24, lineHeight: 30 },
+  desc:      { lineHeight: 19 },
 });

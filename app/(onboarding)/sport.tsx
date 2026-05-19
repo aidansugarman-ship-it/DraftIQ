@@ -57,7 +57,7 @@ export default function SportScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={1} totalSteps={4} showBack={false} />
+        <OnboardingProgress step={1} totalSteps={5} showBack={false} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}

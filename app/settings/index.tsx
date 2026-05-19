@@ -111,11 +111,56 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
+        <Section title="EXPERIENCE LEVEL">
+          <View style={styles.expRow}>
+            {(['beginner', 'experienced'] as const).map((level) => {
+              const active = (user?.experienceLevel ?? 'experienced') === level;
+              return (
+                <TouchableOpacity
+                  key={level}
+                  style={[styles.expPill, active && styles.expPillActive]}
+                  onPress={() => {
+                    useUserStore.getState().updateUser({ experienceLevel: level });
+                    if (user) {
+                      const { doc, updateDoc } = require('firebase/firestore');
+                      const { db, COLLECTIONS } = require('@lib/firebase');
+                      updateDoc(doc(db, COLLECTIONS.USERS, user.uid), { experienceLevel: level }).catch(() => {});
+                    }
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.expEmoji]}>{level === 'beginner' ? '🌱' : '🎯'}</Text>
+                  <Text style={{
+                    color: active ? colors.textPrimary : colors.textTertiary,
+                    fontSize: 14,
+                    fontWeight: active ? '700' : '500',
+                  }}>
+                    {level === 'beginner' ? 'New to fantasy' : 'Experienced'}
+                  </Text>
+                  <Text style={{
+                    color: active ? colors.textSecondary : colors.textTertiary,
+                    fontSize: 11,
+                    marginTop: 2,
+                    textAlign: 'center',
+                  }}>
+                    {level === 'beginner' ? 'Walks you through everything' : 'Sharp takes, no fluff'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Section>
+
         <Section title="LEAGUES">
           <Row
             icon="link-outline"
-            label="Connect Sleeper League"
+            label="Connect Sleeper League (NFL)"
             onPress={() => router.push('/settings/connect-sleeper')}
+          />
+          <Row
+            icon="link"
+            label="Connect Yahoo (all 4 sports)"
+            onPress={() => router.push('/settings/connect-yahoo')}
             last
           />
         </Section>
@@ -175,4 +220,20 @@ const styles = StyleSheet.create({
   rowLeft:      { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowLabel:     { fontSize: 15, color: colors.textPrimary },
   version:      { textAlign: 'center', color: colors.textTertiary, fontSize: 12, marginTop: spacing.md },
+  expRow:       { flexDirection: 'row', gap: spacing.sm, padding: spacing.sm },
+  expPill:      {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    gap: 4,
+  },
+  expPillActive: {
+    borderColor: colors.green,
+    backgroundColor: `${colors.green}10`,
+  },
+  expEmoji:     { fontSize: 24, lineHeight: 30, marginBottom: 4 },
 });

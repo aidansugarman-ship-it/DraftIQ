@@ -36,7 +36,7 @@ import { SportTint } from '@components/shared/SportTint';
 
 // ─── Mock player pool ─────────────────────────────────────────────────────────
 
-type Pos = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
+type Pos = string;
 
 interface TradePlayer {
   id:      string;
@@ -49,7 +49,8 @@ interface TradePlayer {
   bye:     number;
 }
 
-const PLAYER_POOL: TradePlayer[] = [
+const POOLS_BY_SPORT: Record<SportId, TradePlayer[]> = {
+  nfl: [
   { id: '1',  name: 'Christian McCaffrey', team: 'SF',  pos: 'RB',  value: 98, score: 98, age: 27, bye: 9 },
   { id: '2',  name: 'CeeDee Lamb',         team: 'DAL', pos: 'WR',  value: 96, score: 96, age: 25, bye: 7 },
   { id: '3',  name: 'Tyreek Hill',          team: 'MIA', pos: 'WR',  value: 93, score: 94, age: 30, bye: 10 },
@@ -80,7 +81,62 @@ const PLAYER_POOL: TradePlayer[] = [
   { id: '28', name: 'Jake Ferguson',       team: 'DAL', pos: 'TE',  value: 72, score: 74, age: 25, bye: 7 },
   { id: '29', name: 'Derrick Henry',       team: 'BAL', pos: 'RB',  value: 65, score: 61, age: 30, bye: 14 },
   { id: '30', name: 'Alvin Kamara',        team: 'NO',  pos: 'RB',  value: 70, score: 73, age: 29, bye: 12 },
-];
+  ],
+  nba: [
+    { id: 'n1',  name: 'Nikola Jokić',          team: 'DEN', pos: 'C',  value: 99, score: 99, age: 30, bye: 0 },
+    { id: 'n2',  name: 'Luka Dončić',           team: 'LAL', pos: 'PG', value: 97, score: 97, age: 26, bye: 0 },
+    { id: 'n3',  name: 'Shai Gilgeous-Alexander', team: 'OKC', pos: 'PG', value: 96, score: 96, age: 27, bye: 0 },
+    { id: 'n4',  name: 'Giannis Antetokounmpo', team: 'MIL', pos: 'PF', value: 95, score: 95, age: 30, bye: 0 },
+    { id: 'n5',  name: 'Victor Wembanyama',     team: 'SAS', pos: 'C',  value: 93, score: 92, age: 22, bye: 0 },
+    { id: 'n6',  name: 'Anthony Edwards',       team: 'MIN', pos: 'SG', value: 92, score: 91, age: 24, bye: 0 },
+    { id: 'n7',  name: 'Jayson Tatum',          team: 'BOS', pos: 'SF', value: 90, score: 90, age: 27, bye: 0 },
+    { id: 'n8',  name: 'Tyrese Haliburton',     team: 'IND', pos: 'PG', value: 87, score: 86, age: 25, bye: 0 },
+    { id: 'n9',  name: 'Trae Young',            team: 'ATL', pos: 'PG', value: 85, score: 84, age: 26, bye: 0 },
+    { id: 'n10', name: 'Domantas Sabonis',      team: 'SAC', pos: 'C',  value: 84, score: 83, age: 29, bye: 0 },
+    { id: 'n11', name: 'Devin Booker',          team: 'PHX', pos: 'SG', value: 82, score: 82, age: 28, bye: 0 },
+    { id: 'n12', name: 'Jalen Brunson',         team: 'NYK', pos: 'PG', value: 88, score: 88, age: 28, bye: 0 },
+    { id: 'n13', name: 'Anthony Davis',         team: 'DAL', pos: 'PF', value: 86, score: 85, age: 32, bye: 0 },
+    { id: 'n14', name: 'Karl-Anthony Towns',    team: 'NYK', pos: 'C',  value: 83, score: 83, age: 30, bye: 0 },
+    { id: 'n15', name: 'LeBron James',          team: 'LAL', pos: 'SF', value: 78, score: 77, age: 41, bye: 0 },
+  ],
+  mlb: [
+    { id: 'm1',  name: 'Aaron Judge',           team: 'NYY', pos: 'OF', value: 98, score: 98, age: 33, bye: 0 },
+    { id: 'm2',  name: 'Shohei Ohtani',         team: 'LAD', pos: 'OF', value: 99, score: 99, age: 31, bye: 0 },
+    { id: 'm3',  name: 'Bobby Witt Jr.',        team: 'KC',  pos: 'SS', value: 95, score: 95, age: 25, bye: 0 },
+    { id: 'm4',  name: 'Juan Soto',             team: 'NYM', pos: 'OF', value: 94, score: 94, age: 26, bye: 0 },
+    { id: 'm5',  name: 'Tarik Skubal',          team: 'DET', pos: 'SP', value: 96, score: 96, age: 28, bye: 0 },
+    { id: 'm6',  name: 'Paul Skenes',           team: 'PIT', pos: 'SP', value: 93, score: 92, age: 23, bye: 0 },
+    { id: 'm7',  name: 'Gunnar Henderson',      team: 'BAL', pos: 'SS', value: 90, score: 89, age: 24, bye: 0 },
+    { id: 'm8',  name: 'Mookie Betts',          team: 'LAD', pos: 'OF', value: 88, score: 87, age: 32, bye: 0 },
+    { id: 'm9',  name: 'José Ramírez',          team: 'CLE', pos: '3B', value: 91, score: 90, age: 32, bye: 0 },
+    { id: 'm10', name: 'Freddie Freeman',       team: 'LAD', pos: '1B', value: 85, score: 85, age: 35, bye: 0 },
+    { id: 'm11', name: 'Corbin Carroll',        team: 'ARI', pos: 'OF', value: 84, score: 83, age: 24, bye: 0 },
+    { id: 'm12', name: 'Ronald Acuña Jr.',      team: 'ATL', pos: 'OF', value: 87, score: 86, age: 27, bye: 0 },
+    { id: 'm13', name: 'Emmanuel Clase',        team: 'CLE', pos: 'RP', value: 82, score: 81, age: 27, bye: 0 },
+    { id: 'm14', name: 'Yainer Diaz',           team: 'HOU', pos: 'C',  value: 75, score: 74, age: 26, bye: 0 },
+    { id: 'm15', name: 'Elly De La Cruz',       team: 'CIN', pos: 'SS', value: 89, score: 88, age: 23, bye: 0 },
+  ],
+  nhl: [
+    { id: 'h1',  name: 'Connor McDavid',        team: 'EDM', pos: 'C',  value: 99, score: 99, age: 28, bye: 0 },
+    { id: 'h2',  name: 'Nathan MacKinnon',      team: 'COL', pos: 'C',  value: 97, score: 96, age: 30, bye: 0 },
+    { id: 'h3',  name: 'Nikita Kucherov',       team: 'TBL', pos: 'RW', value: 96, score: 96, age: 32, bye: 0 },
+    { id: 'h4',  name: 'Auston Matthews',       team: 'TOR', pos: 'C',  value: 94, score: 93, age: 28, bye: 0 },
+    { id: 'h5',  name: 'Leon Draisaitl',        team: 'EDM', pos: 'C',  value: 93, score: 92, age: 30, bye: 0 },
+    { id: 'h6',  name: 'Cale Makar',            team: 'COL', pos: 'D',  value: 92, score: 91, age: 27, bye: 0 },
+    { id: 'h7',  name: 'David Pastrňák',        team: 'BOS', pos: 'RW', value: 90, score: 89, age: 29, bye: 0 },
+    { id: 'h8',  name: 'Quinn Hughes',          team: 'VAN', pos: 'D',  value: 88, score: 88, age: 26, bye: 0 },
+    { id: 'h9',  name: 'Mikko Rantanen',        team: 'COL', pos: 'RW', value: 87, score: 86, age: 29, bye: 0 },
+    { id: 'h10', name: 'Sidney Crosby',         team: 'PIT', pos: 'C',  value: 82, score: 81, age: 38, bye: 0 },
+    { id: 'h11', name: 'Alexander Ovechkin',    team: 'WSH', pos: 'LW', value: 78, score: 77, age: 40, bye: 0 },
+    { id: 'h12', name: 'Connor Hellebuyck',     team: 'WPG', pos: 'G',  value: 86, score: 85, age: 32, bye: 0 },
+    { id: 'h13', name: 'Igor Shesterkin',       team: 'NYR', pos: 'G',  value: 84, score: 83, age: 30, bye: 0 },
+    { id: 'h14', name: 'Matthew Tkachuk',       team: 'FLA', pos: 'LW', value: 85, score: 84, age: 28, bye: 0 },
+    { id: 'h15', name: 'Brad Marchand',         team: 'BOS', pos: 'LW', value: 76, score: 75, age: 37, bye: 0 },
+  ],
+};
+
+// Backwards-compat alias — defaults to NFL pool. The screen reads from POOLS_BY_SPORT[sport] at runtime.
+const PLAYER_POOL: TradePlayer[] = POOLS_BY_SPORT.nfl;
 
 // ─── Mock verdict generator ───────────────────────────────────────────────────
 
@@ -204,16 +260,21 @@ function PickerModal({
   onClose,
   onSelect,
   excluded,
+  sport,
 }: {
   visible:  boolean;
   onClose:  () => void;
   onSelect: (p: TradePlayer) => void;
   excluded: string[];
+  sport:    SportId;
 }) {
   const [query, setQuery] = useState('');
-  const [posFilter, setPosFilter] = useState<Pos | 'ALL'>('ALL');
+  const [posFilter, setPosFilter] = useState<string>('ALL');
 
-  const filtered = PLAYER_POOL.filter(p => {
+  const pool = POOLS_BY_SPORT[sport] ?? POOLS_BY_SPORT.nfl;
+  const positions = Array.from(new Set(pool.map(p => p.pos)));
+
+  const filtered = pool.filter(p => {
     if (excluded.includes(p.id)) return false;
     const matchPos    = posFilter === 'ALL' || p.pos === posFilter;
     const matchSearch = !query || p.name.toLowerCase().includes(query.toLowerCase()) || p.team.toLowerCase().includes(query.toLowerCase());
@@ -244,7 +305,7 @@ function PickerModal({
           />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={modal.posScroll} contentContainerStyle={{ paddingRight: spacing.base }}>
-          {(['ALL', 'QB', 'RB', 'WR', 'TE'] as const).map(pos => (
+          {(['ALL', ...positions]).map(pos => (
             <TouchableOpacity
               key={pos}
               style={[modal.pill, posFilter === pos && modal.pillActive]}
@@ -312,7 +373,7 @@ function VerdictCard({ verdict }: { verdict: Verdict }) {
       <View style={vcard.header}>
         <View>
           <Text variant="labelSmall" color={colors.textTertiary} style={{ letterSpacing: 1 }}>
-            AI VERDICT
+            THE READ
           </Text>
           <Text variant="h3" style={{ color: winColor, marginTop: 4 }}>{verdict.label}</Text>
         </View>
@@ -511,12 +572,17 @@ export default function TradeAnalyzerScreen() {
   const tier         = useUserStore(s => s.tier);
   const currentSport = useUserStore(s => s.currentSport);
   const sportLabel   = SPORTS[currentSport].shortLabel;
+  const user         = useUserStore(s => s.user);
+  const leagueCtx    = user?.leagueSettings;
+  const scoringDesc  = leagueCtx ? `${leagueCtx.scoringType?.toUpperCase() ?? 'standard'} scoring, ${leagueCtx.numTeams ?? 12}-team${leagueCtx.isDynasty ? ' dynasty' : ''}` : `${sportLabel} fantasy`;
 
   const [giving,    setGiving]    = useState<TradePlayer[]>([]);
   const [receiving, setReceiving] = useState<TradePlayer[]>([]);
   const [modalSide, setModalSide] = useState<ModalSide>(null);
   const [verdict,   setVerdict]   = useState<Verdict | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  // Per-player breakdowns (one read per player) so the user sees WHY a side wins
+  const [playerReads, setPlayerReads] = useState<Record<string, string>>({});
 
   const [signals, setSignals]               = useState<EspnNewsItem[]>([]);
   const [signalsLoading, setSignalsLoading] = useState(true);
@@ -560,14 +626,34 @@ export default function TradeAnalyzerScreen() {
   async function analyze() {
     if (giving.length === 0 || receiving.length === 0) return;
     setAnalyzing(true);
+    setPlayerReads({});
     try {
       const localVerdict = analyzeTradeLocally(giving, receiving);
-      const aiReasoning = await gemini.tradeAdvice(
-        giving.map(p => `${p.name} (${p.position})`),
-        receiving.map(p => `${p.name} (${p.position})`),
-        sportLabel
-      );
+      const givingStr    = giving.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ');
+      const receivingStr = receiving.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ');
+
+      const prompt = `${sportLabel} fantasy trade review for ${scoringDesc}.
+GIVING: ${givingStr}
+RECEIVING: ${receivingStr}
+
+Give a sharp, opinionated verdict in 3 short paragraphs:
+1. Bottom line — who wins this trade in ONE sentence (use ALL CAPS for the verdict word).
+2. Why — the 2-3 specific factors driving your call (position scarcity, schedule, role, age curve, etc.). Reference the league context (${scoringDesc}).
+3. Counter — the strongest case for the OTHER side, so the user can pressure-test.
+
+TikTok creator voice: confident, brief, opinionated. No fluff. No disclaimers.`;
+
+      const aiReasoning = await gemini.chat(prompt, sportLabel);
       setVerdict({ ...localVerdict, reasoning: aiReasoning });
+
+      // Background: fetch per-player breakdowns (parallel, fire-and-forget)
+      [...giving, ...receiving].forEach((p) => {
+        const side = giving.includes(p) ? 'GIVING' : 'RECEIVING';
+        const sub  = `${sportLabel} fantasy take on ${p.name} (${p.position}, ${p.team}) in ${scoringDesc}. ONE punchy sentence on his current trade value and ONE on whether you'd want him on the ${side} side of this trade.`;
+        gemini.chat(sub, sportLabel)
+          .then(read => setPlayerReads(prev => ({ ...prev, [p.id]: read })))
+          .catch(() => {});
+      });
     } catch {
       const v = analyzeTradeLocally(giving, receiving);
       setVerdict(v);
@@ -729,6 +815,21 @@ export default function TradeAnalyzerScreen() {
           {/* Verdict */}
           {verdict && <VerdictCard verdict={verdict} />}
 
+          {/* Per-player breakdowns — the depth that makes trade analyzer feel pro */}
+          {verdict && (giving.length + receiving.length > 0) && (
+            <View style={breakdownStyles.section}>
+              <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1, marginBottom: spacing.sm }}>
+                PER-PLAYER READ · {scoringDesc.toUpperCase()}
+              </Text>
+              {giving.map(p => (
+                <PerPlayerRead key={`g-${p.id}`} player={p} side="GIVING" text={playerReads[p.id]} />
+              ))}
+              {receiving.map(p => (
+                <PerPlayerRead key={`r-${p.id}`} player={p} side="RECEIVING" text={playerReads[p.id]} />
+              ))}
+            </View>
+          )}
+
           <View style={styles.bottomSpacer} />
         </ScrollView>
 
@@ -738,13 +839,68 @@ export default function TradeAnalyzerScreen() {
           onClose={() => setModalSide(null)}
           onSelect={p => modalSide && addPlayer(modalSide, p)}
           excluded={excluded}
+          sport={currentSport}
         />
       </SafeAreaView>
     </View>
   );
 }
 
+// ─── Per-player read row ──────────────────────────────────────────────────────
+
+function PerPlayerRead({ player, side, text }: { player: TradePlayer; side: 'GIVING' | 'RECEIVING'; text?: string }) {
+  const sideColor = side === 'GIVING' ? colors.coral : colors.green;
+  return (
+    <View style={[breakdownStyles.row, { borderLeftColor: sideColor }]}>
+      <View style={breakdownStyles.headRow}>
+        <View style={[breakdownStyles.sidePill, { backgroundColor: `${sideColor}18`, borderColor: `${sideColor}45` }]}>
+          <Text variant="labelSmall" style={{ color: sideColor, fontSize: 10, letterSpacing: 0.5 }}>{side}</Text>
+        </View>
+        <Text variant="bodyMedium" color={colors.textPrimary} style={{ flex: 1 }} numberOfLines={1}>
+          {player.name} <Text variant="caption" color={colors.textTertiary}>· {player.position} · {player.team}</Text>
+        </Text>
+      </View>
+      {text ? (
+        <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 6, lineHeight: 19 }}>
+          {text}
+        </Text>
+      ) : (
+        <Text variant="bodySmall" color={colors.textTertiary} style={{ marginTop: 6 }}>
+          Reading the latest on this player…
+        </Text>
+      )}
+    </View>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
+
+const breakdownStyles = StyleSheet.create({
+  section: {
+    marginTop:    spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  row: {
+    padding:         spacing.base,
+    borderRadius:    radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    borderLeftWidth: 3,
+    marginBottom:    spacing.sm,
+  },
+  headRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.sm,
+  },
+  sidePill: {
+    paddingHorizontal: 8,
+    paddingVertical:   3,
+    borderRadius:      999,
+    borderWidth:       1,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },

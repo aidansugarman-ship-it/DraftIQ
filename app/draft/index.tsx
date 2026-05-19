@@ -598,7 +598,7 @@ export default function MockDraftScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text variant="labelSmall" color={colors.textTertiary} style={{ letterSpacing: 0.6 }}>
-                  AI SUGGESTS
+                  TOP READ
                 </Text>
                 <Text variant="bodyMedium" color={colors.textPrimary}>
                   {suggestion.player.name}

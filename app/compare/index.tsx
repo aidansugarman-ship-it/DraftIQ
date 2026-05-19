@@ -517,10 +517,10 @@ export default function CompareScreen() {
                 ))}
               </View>
 
-              {/* AI Verdict */}
+              {/* Verdict */}
               <View style={styles.verdictSection}>
                 <Text variant="label" color={colors.textTertiary} style={styles.metricsTitle}>
-                  AI VERDICT
+                  THE CALL
                 </Text>
                 <View style={[styles.verdictCard, { borderColor: `${colors.green}30` }]}>
                   <View style={styles.verdictName}>

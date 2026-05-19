@@ -9,6 +9,7 @@ interface OnboardingState {
   preferredSports:        SportId[];
   primarySport:           SportId;
   experienceLevel:        'beginner' | 'experienced' | null;
+  teamStyle:              'winNow' | 'futureStars' | 'balanced' | 'starsScrubs' | null;
   scoringType:            ScoringTypeId | null;
   numTeams:               number;
   format:                 DraftFormat;
@@ -19,6 +20,7 @@ interface OnboardingState {
 
   setPreferredSports:     (sports: SportId[]) => void;
   setExperienceLevel:     (level: 'beginner' | 'experienced') => void;
+  setTeamStyle:           (style: 'winNow' | 'futureStars' | 'balanced' | 'starsScrubs') => void;
   setScoringType:         (t: ScoringTypeId) => void;
   setNumTeams:            (n: number) => void;
   setFormat:              (f: DraftFormat) => void;
@@ -33,6 +35,7 @@ const INITIAL: Omit<OnboardingState, 'setPreferredSports' | 'setExperienceLevel'
   preferredSports:       [],
   primarySport:          'nfl',
   experienceLevel:       null,
+  teamStyle:             null,
   scoringType:           null,
   numTeams:              12,
   format:                'snake',
@@ -50,6 +53,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     primarySport:    sports[0] ?? 'nfl',
   }),
   setExperienceLevel: (experienceLevel) => set({ experienceLevel }),
+  setTeamStyle:       (teamStyle) => set({ teamStyle }),
   setScoringType:   (scoringType) => set({ scoringType }),
   setNumTeams:      (numTeams) => set({ numTeams }),
   setFormat:        (format) => set({ format }),
@@ -70,6 +74,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
       primarySport:       s.primarySport,
       preferredSports:    s.preferredSports,
       experienceLevel:    s.experienceLevel ?? 'experienced',
+      teamStyle:          s.teamStyle ?? 'balanced',
       archetype:          s.archetype ?? 'balanced',
       leagueSettings: {
         sport:                  s.primarySport,

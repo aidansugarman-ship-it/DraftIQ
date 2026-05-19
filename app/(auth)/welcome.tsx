@@ -39,7 +39,7 @@ const FEATURES = [
   {
     emoji:    '⚡',
     label:    'Always-On Coach',
-    sub:      'Pickup alerts, waiver intel, and live AI takes that follow the season — not just draft day',
+    sub:      'Pickup alerts, waiver intel, and news-driven takes that follow the season — not just draft day',
     color:    colors.gold,
     delay:    700,
   },

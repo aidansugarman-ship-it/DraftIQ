@@ -86,7 +86,7 @@ function PlayerRow({
   return (
     <TouchableOpacity
       style={[rowStyles.row, medal && { backgroundColor: `${medal.color}06` }]}
-      onPress={() => router.push(`/player?id=${item.id}`)}
+      onPress={() => router.push(`/player?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(item.name)}&team=${encodeURIComponent(item.team)}&pos=${encodeURIComponent(item.pos)}`)}
       activeOpacity={0.75}
     >
       <Text style={[rowStyles.rank, medal && { color: medal.color }]} numberOfLines={1}>

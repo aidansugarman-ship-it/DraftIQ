@@ -1,0 +1,66 @@
+---
+format_version: '13'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: react-native
+workflows:
+  ios-simulator-build:
+    description: Build DraftIQ for the iOS Simulator and upload the .app artifact.
+    steps:
+    - activate-ssh-key@4:
+        run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+    - git-clone@8: {}
+    - script@1:
+        title: Install npm dependencies
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -ex
+            npm install
+    - script@1:
+        title: Generate iOS project from Expo config
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -ex
+            npx expo prebuild --clean -p ios
+    - cocoapods-install@2:
+        inputs:
+        - source_root_path: $BITRISE_SOURCE_DIR/ios
+    - script@1:
+        title: Build iOS app for Simulator
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -ex
+            cd ios
+            xcodebuild build \
+              -workspace DraftIQ.xcworkspace \
+              -scheme DraftIQ \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              -derivedDataPath build \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO
+    - script@1:
+        title: Collect .app artifact
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -ex
+            APP_PATH=$(find ios/build/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
+            if [ -z "$APP_PATH" ]; then
+              echo "No .app found"
+              exit 1
+            fi
+            mkdir -p $BITRISE_DEPLOY_DIR
+            cp -R "$APP_PATH" "$BITRISE_DEPLOY_DIR/"
+            echo "Deployed: $(basename $APP_PATH)"
+    - deploy-to-bitrise-io@2: {}
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.0.x
+        machine_type_id: g2-m1.4core
+trigger_map:
+- push_branch: '*'
+  workflow: ios-simulator-build

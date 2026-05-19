@@ -116,7 +116,7 @@ export default function LeagueSettingsScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={3} totalSteps={4} />
+        <OnboardingProgress step={4} totalSteps={5} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}

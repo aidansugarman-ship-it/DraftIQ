@@ -28,6 +28,16 @@ import { espn, EspnNewsItem } from '@services/espn';
 import { SportSwitcher } from '@components/ui/SportSwitcher';
 import type { SportId } from '@constants/sports';
 import { useMyRoster } from '@hooks/useMyRoster';
+import { useFantasySuggestions, type FantasySuggestion } from '@hooks/useFantasySuggestions';
+import { useDailyDrops } from '@hooks/useDailyDrops';
+import { VIBES } from '@constants/sportVibes';
+import { NewsTicker } from '@components/shared/NewsTicker';
+import { useFavoritesStore } from '@store/useFavoritesStore';
+import { ConfidenceStars } from '@components/shared/ConfidenceStars';
+import { useStreakStore } from '@store/useStreakStore';
+import { gemini } from '@services/gemini';
+import { ActivityIndicator } from 'react-native';
+import { useCallback } from 'react';
 import { SportTint } from '@components/shared/SportTint';
 import { TeamLogo } from '@components/shared/TeamLogo';
 import { PlayerAvatar } from '@components/shared/PlayerAvatar';
@@ -334,6 +344,118 @@ function getGreeting() {
   return 'GOOD EVENING,';
 }
 
+// ─── Hit Rate Badge — proves the calls actually work ───────────────────────────
+
+function HitRateBadge() {
+  const hitRate = useStreakStore(s => s.hitRate(7));
+  if (hitRate.total === 0) {
+    return (
+      <View style={hrStyles.wrap}>
+        <Text style={{ fontSize: 14 }}>📊</Text>
+        <Text variant="bodySmall" color={colors.textSecondary} style={{ flex: 1 }}>
+          Hit rate tracker on — we'll show how the calls play out.
+        </Text>
+      </View>
+    );
+  }
+  const isGood = hitRate.pct >= 60;
+  return (
+    <View style={hrStyles.wrap}>
+      <Text style={{ fontSize: 16 }}>{isGood ? '🎯' : '📊'}</Text>
+      <Text variant="bodySmall" color={colors.textPrimary} style={{ flex: 1 }}>
+        Last 7 days: <Text variant="bodySmallMedium" style={{ color: isGood ? colors.green : colors.gold }}>
+          {hitRate.hits} of {hitRate.total}
+        </Text> calls hit ({hitRate.pct}%)
+      </Text>
+    </View>
+  );
+}
+
+// ─── Fantasy Suggestion Card — proactive AI moves ───────────────────────────
+
+const ACTION_COLOR: Record<FantasySuggestion['action'], string> = {
+  'ADD':         colors.green,
+  'DROP':        colors.coral,
+  'TRADE FOR':   colors.purple,
+  'SELL HIGH':   colors.gold,
+  'BUY LOW':     colors.blue,
+};
+
+function SuggestionCard({ suggestion }: { suggestion: FantasySuggestion }) {
+  const color = ACTION_COLOR[suggestion.action] ?? colors.green;
+  return (
+    <View style={[suggestStyles.card, { borderLeftColor: color, borderLeftWidth: 3 }]}>
+      <View style={[suggestStyles.actionPill, { backgroundColor: `${color}18`, borderColor: `${color}45` }]}>
+        <Text variant="labelSmall" style={{ color, letterSpacing: 0.6, fontSize: 10 }}>
+          {suggestion.action}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1}>
+          {suggestion.player}
+        </Text>
+        <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 18, marginTop: 2 }}>
+          {suggestion.reason}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Weekly Start/Sit Card — uses the user's real Sleeper roster ──────────────
+
+function WeeklyStartSitCard({ roster }: { roster: any }) {
+  const [advice, setAdvice]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen]       = useState(false);
+
+  const ask = useCallback(() => {
+    if (advice) { setOpen(v => !v); return; }
+    setOpen(true);
+    setLoading(true);
+    const starters = roster.players.filter((p: any) => p.isStarter);
+    const list = starters.map((p: any) => `${p.name} (${p.position}, ${p.team})${p.injury ? ` - ${p.injury.status}` : ''}`).join(', ');
+    gemini.gmWeeklyReport(starters.map((p: any) => p.name), 'NFL')
+      .then((text) => setAdvice(text))
+      .catch(() => setAdvice('AI take unavailable right now.'))
+      .finally(() => setLoading(false));
+  }, [advice, roster]);
+
+  return (
+    <TouchableOpacity
+      style={startSitStyles.wrap}
+      onPress={ask}
+      activeOpacity={0.85}
+    >
+      <View style={startSitStyles.headerRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 18 }}>🎯</Text>
+          <Text variant="bodyMedium" color={colors.textPrimary}>This week's lineup</Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textTertiary} />
+      </View>
+      {open ? (
+        <View style={{ marginTop: spacing.sm }}>
+          {loading ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator size="small" color={colors.green} />
+              <Text variant="bodySmall" color={colors.textTertiary}>Reading the latest on your roster…</Text>
+            </View>
+          ) : (
+            <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 20 }}>
+              {advice}
+            </Text>
+          )}
+        </View>
+      ) : (
+        <Text variant="caption" color={colors.textTertiary} style={{ marginTop: 4 }}>
+          Tap for AI start/sit calls based on your roster
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -343,6 +465,8 @@ export default function HomeScreen() {
   const { players: trendPlayers, loading: trendLoading } = useLiveTrending();
   const { items: newsItems,      loading: newsLoading  } = useSportNews(sportForData);
   const { alerts: liveAlerts,    loading: alertsLoading } = useLiveAlerts(sportForData);
+  const { suggestions: aiSuggestions, loading: suggestionsLoading } = useFantasySuggestions(sportForData);
+  const dailyDrops = useDailyDrops(sportForData);
   const { roster: myRoster, hasLeague, loading: rosterLoading } = useMyRoster();
 
   const heroOp = useSharedValue(0);
@@ -381,6 +505,17 @@ export default function HomeScreen() {
               </View>
               <View style={styles.headerRight}>
                 <TierBadge tier={tier} />
+                {user?.experienceLevel && (
+                  <View style={[expBadge.wrap, user.experienceLevel === 'beginner' ? expBadge.beginner : expBadge.experienced]}>
+                    <Text variant="labelSmall" style={{
+                      color: user.experienceLevel === 'beginner' ? colors.gold : colors.green,
+                      letterSpacing: 0.6,
+                      fontSize: 10,
+                    }}>
+                      {user.experienceLevel === 'beginner' ? '🌱 NEW' : '🎯 PRO'}
+                    </Text>
+                  </View>
+                )}
                 <TouchableOpacity
                   style={styles.notifBtn}
                   onPress={() => router.push('/(tabs)/profile')}
@@ -457,7 +592,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     key={p.id}
                     style={rosterStyles.row}
-                    onPress={() => router.push(`/player?id=${p.id}`)}
+                    onPress={() => router.push(`/player?id=${encodeURIComponent(p.id)}&name=${encodeURIComponent(p.name)}&team=${encodeURIComponent(p.team)}&pos=${encodeURIComponent(p.position)}`)}
                     activeOpacity={0.7}
                   >
                     <PlayerAvatar sport={sportForData} id={p.id} name={p.name} size={32} />
@@ -476,6 +611,23 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              <WeeklyStartSitCard roster={myRoster} />
+              <TouchableOpacity
+                style={pwrCta.wrap}
+                onPress={() => router.push('/power-rankings')}
+                activeOpacity={0.85}
+              >
+                <View style={pwrCta.iconBubble}>
+                  <Ionicons name="trophy" size={18} color={colors.gold} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium" color={colors.textPrimary}>League Power Rankings</Text>
+                  <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                    See where every team in your league stands — AI ranked weekly
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
             </>
           )}
 
@@ -491,11 +643,172 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }}>
                 <Text variant="bodyMedium" color={colors.textPrimary}>Connect your Sleeper league</Text>
                 <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                  Pull your real roster — every AI take becomes about YOUR players. (NFL only.)
+                  Pull your real roster → personalized takes built around YOUR players. (NFL only.)
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
             </TouchableOpacity>
+          )}
+
+          {/* ── Live news ticker ──────────────────────────────────────────── */}
+          <NewsTicker sport={sportForData} />
+
+          {/* ── Hit rate badge — accountability for the calls ─────────────── */}
+          <HitRateBadge />
+
+          {/* ── TODAY'S DROPS — cross-sport TikTok-style feed ─────────────── */}
+          <TouchableOpacity
+            style={todayCta.wrap}
+            onPress={() => router.push('/today')}
+            activeOpacity={0.85}
+          >
+            <View style={todayCta.iconBubble}>
+              <Ionicons name="flame" size={18} color={colors.coral} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary}>Today's Drops</Text>
+              <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                Vertical feed · all 4 sports · only the cards that matter
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
+          {/* ── Player Lookup CTA — the "ask about any player" entry ─────── */}
+          <TouchableOpacity
+            style={lookupCta.wrap}
+            onPress={() => router.push('/lookup')}
+            activeOpacity={0.85}
+          >
+            <View style={lookupCta.iconBubble}>
+              <Ionicons name="search" size={20} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary}>Look up any {sportDef.shortLabel} player</Text>
+              <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                Type a name → AI start/sit, trade value, matchup analysis
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
+
+          {/* ── Today's Hot Board — backed by real news/data ──────────────── */}
+          <SectionHeader
+            label={`${VIBES[sportForData].hot} TODAY'S ${sportDef.shortLabel} HOT BOARD`}
+            live
+          />
+          <Text variant="caption" color={colors.textTertiary} style={{ marginBottom: spacing.sm, marginTop: -4 }}>
+            Built from live {sportDef.shortLabel} news, injury reports & league trends.
+          </Text>
+          <View style={suggestStyles.list}>
+            {suggestionsLoading && aiSuggestions.length === 0 ? (
+              [0, 1, 2].map((i) => (
+                <View key={i} style={[suggestStyles.card, { opacity: 0.4 }]}>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <View style={[suggestStyles.skel, { width: 60, height: 18 }]} />
+                    <View style={[suggestStyles.skel, { width: '70%', height: 14 }]} />
+                    <View style={[suggestStyles.skel, { width: '90%', height: 12 }]} />
+                  </View>
+                </View>
+              ))
+            ) : aiSuggestions.length > 0 ? (
+              aiSuggestions.map((s, i) => (
+                <SuggestionCard key={i} suggestion={s} />
+              ))
+            ) : (
+              <View style={[suggestStyles.card, { alignItems: 'center' }]}>
+                <Text variant="bodySmall" color={colors.textTertiary}>No AI suggestions yet — try refreshing.</Text>
+              </View>
+            )}
+          </View>
+
+          {/* ── ⚡ Today's news reaction ──────────────────────────────────── */}
+          {(dailyDrops.newsTake.headline || dailyDrops.loading) && (
+            <View style={dropStyles.newsReactionCard}>
+              <View style={dropStyles.tagRow}>
+                <Text style={{ fontSize: 14 }}>{VIBES[sportForData].news}</Text>
+                <Text variant="labelSmall" color={colors.gold} style={{ letterSpacing: 1 }}>
+                  REACTION TO THE NEWS
+                </Text>
+              </View>
+              {dailyDrops.loading && !dailyDrops.newsTake.headline ? (
+                <Text variant="bodySmall" color={colors.textTertiary}>Reading today's headlines…</Text>
+              ) : (
+                <>
+                  <Text variant="bodyMedium" color={colors.textPrimary} style={{ marginTop: 4 }}>
+                    {dailyDrops.newsTake.headline}
+                  </Text>
+                  <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 6, lineHeight: 19 }}>
+                    {dailyDrops.newsTake.take}
+                  </Text>
+                  <View style={{ marginTop: 8 }}>
+                    <ConfidenceStars value={dailyDrops.newsTake.confidence} />
+                  </View>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* ── 🎯 Bold call of the day ───────────────────────────────────── */}
+          {(dailyDrops.prediction.headline || dailyDrops.loading) && (
+            <View style={dropStyles.predictionCard}>
+              <View style={dropStyles.tagRow}>
+                <Text style={{ fontSize: 14 }}>{VIBES[sportForData].bold}</Text>
+                <Text variant="labelSmall" style={{ color: colors.coral, letterSpacing: 1 }}>
+                  BOLD CALL OF THE DAY
+                </Text>
+              </View>
+              {dailyDrops.loading && !dailyDrops.prediction.headline ? (
+                <Text variant="bodySmall" color={colors.textTertiary}>Reading the latest signals…</Text>
+              ) : (
+                <>
+                  <Text variant="bodyMedium" color={colors.textPrimary} style={{ marginTop: 4, fontWeight: '700' }}>
+                    {dailyDrops.prediction.headline}
+                  </Text>
+                  <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 6, lineHeight: 19 }}>
+                    {dailyDrops.prediction.reasoning}
+                  </Text>
+                  <View style={{ marginTop: 8 }}>
+                    <ConfidenceStars value={dailyDrops.prediction.confidence} />
+                  </View>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* ── 💎 Sleepers nobody is talking about ───────────────────────── */}
+          {(dailyDrops.sleepers.length > 0 || dailyDrops.loading) && (
+            <>
+              <SectionHeader
+                label={`${VIBES[sportForData].sleeper} ${sportDef.shortLabel} SLEEPERS · UNDER THE RADAR`}
+              />
+              <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+                {dailyDrops.loading && dailyDrops.sleepers.length === 0 ? (
+                  <View style={dropStyles.sleeperCard}>
+                    <Text variant="bodySmall" color={colors.textTertiary}>Surfacing hidden value…</Text>
+                  </View>
+                ) : (
+                  dailyDrops.sleepers.map((s, i) => (
+                    <View key={i} style={dropStyles.sleeperCard}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={dropStyles.sleeperBadge}>
+                          <Text variant="labelSmall" style={{ color: colors.purple, fontSize: 10, letterSpacing: 0.5 }}>
+                            SLEEPER #{i + 1}
+                          </Text>
+                        </View>
+                        <ConfidenceStars value={s.confidence} />
+                      </View>
+                      <Text variant="bodyMedium" color={colors.textPrimary} style={{ marginTop: 4 }}>
+                        {s.player} <Text variant="caption" color={colors.textTertiary}>· {s.pos} · {s.team}</Text>
+                      </Text>
+                      <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 19 }}>
+                        {s.reason}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            </>
           )}
 
           {/* ── Alerts (live per sport) ──────────────────────────────────── */}
@@ -788,6 +1101,115 @@ const trendStyles = StyleSheet.create({
   },
 });
 
+const dropStyles = StyleSheet.create({
+  tagRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           6,
+  },
+  newsReactionCard: {
+    padding:         spacing.base,
+    borderRadius:    radius.lg,
+    backgroundColor: `${colors.gold}0F`,
+    borderWidth:     1,
+    borderColor:     `${colors.gold}45`,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gold,
+    marginBottom:    spacing.md,
+  },
+  predictionCard: {
+    padding:         spacing.base,
+    borderRadius:    radius.lg,
+    backgroundColor: `${colors.coral}0F`,
+    borderWidth:     1,
+    borderColor:     `${colors.coral}45`,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.coral,
+    marginBottom:    spacing.md,
+  },
+  sleeperCard: {
+    padding:         spacing.base,
+    borderRadius:    radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.purple,
+  },
+  sleeperBadge: {
+    alignSelf:        'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical:   3,
+    borderRadius:      999,
+    backgroundColor:   `${colors.purple}18`,
+    borderWidth:       1,
+    borderColor:       `${colors.purple}40`,
+    marginBottom:      6,
+  },
+});
+
+const suggestStyles = StyleSheet.create({
+  list: {
+    gap:          spacing.sm,
+    marginBottom: spacing.md,
+  },
+  card: {
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    gap:             spacing.sm,
+    padding:         spacing.base,
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     colors.border,
+  },
+  actionPill: {
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderRadius:      999,
+    borderWidth:       1,
+    marginTop:         2,
+  },
+  skel: {
+    backgroundColor: colors.border,
+    borderRadius:    radius.xs,
+  },
+});
+
+const startSitStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor: `${colors.green}10`,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     `${colors.green}40`,
+    padding:         spacing.base,
+    marginTop:       -spacing.sm,
+    marginBottom:    spacing.md,
+  },
+  headerRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+  },
+});
+
+const expBadge = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderRadius:      999,
+    borderWidth:       1,
+  },
+  beginner: {
+    backgroundColor: `${colors.gold}18`,
+    borderColor:     `${colors.gold}50`,
+  },
+  experienced: {
+    backgroundColor: `${colors.green}18`,
+    borderColor:     `${colors.green}50`,
+  },
+});
+
 const rosterStyles = StyleSheet.create({
   card: {
     backgroundColor:  colors.surface,
@@ -821,6 +1243,82 @@ const rosterStyles = StyleSheet.create({
   },
   injuryDot: {
     width:  8, height: 8, borderRadius: 4,
+  },
+});
+
+const hrStyles = StyleSheet.create({
+  wrap: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    padding:         spacing.sm,
+    paddingHorizontal: spacing.base,
+    backgroundColor: colors.surface,
+    borderRadius:    radius.md,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    marginBottom:    spacing.md,
+  },
+});
+
+const pwrCta = StyleSheet.create({
+  wrap: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    padding:         spacing.base,
+    backgroundColor: `${colors.gold}0F`,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     `${colors.gold}40`,
+    marginTop:       spacing.sm,
+    marginBottom:    spacing.md,
+  },
+  iconBubble: {
+    width:           40, height: 40, borderRadius: 20,
+    backgroundColor: `${colors.gold}20`,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+});
+
+const todayCta = StyleSheet.create({
+  wrap: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    padding:         spacing.base,
+    backgroundColor: `${colors.coral}0F`,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     `${colors.coral}40`,
+    marginBottom:    spacing.md,
+  },
+  iconBubble: {
+    width:           40, height: 40, borderRadius: 20,
+    backgroundColor: `${colors.coral}20`,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+});
+
+const lookupCta = StyleSheet.create({
+  wrap: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    padding:         spacing.base,
+    backgroundColor: `${colors.gold}0F`,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     `${colors.gold}40`,
+    marginBottom:    spacing.md,
+  },
+  iconBubble: {
+    width:           40, height: 40, borderRadius: 20,
+    backgroundColor: `${colors.gold}20`,
+    alignItems:      'center',
+    justifyContent:  'center',
   },
 });
 

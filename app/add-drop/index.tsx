@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { sleeper, SleeperPlayer } from '@services/sleeper';
 import { espn, EspnNewsItem, EspnInjury } from '@services/espn';
+import { mlbStats } from '@services/mlbStats';
+import { nhlStats } from '@services/nhlStats';
 import { gemini } from '@services/gemini';
 import { router } from 'expo-router';
 import { useUserStore } from '@store/useUserStore';
@@ -436,6 +438,32 @@ function PlayerWatchCard({ item, index, sport }: { item: EspnInjury; index: numb
   );
 }
 
+const trendingStyles = StyleSheet.create({
+  row: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    backgroundColor: colors.surface,
+    borderRadius:    radius.md,
+    borderWidth:     1,
+    borderColor:     colors.border,
+  },
+  rank: {
+    width:           28,
+    alignItems:      'center',
+  },
+  statPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical:   4,
+    borderRadius:      radius.sm,
+    backgroundColor:   `${colors.green}14`,
+    borderWidth:       1,
+    borderColor:       `${colors.green}40`,
+  },
+});
+
 const playerWatchStyles = StyleSheet.create({
   wrap: {
     backgroundColor: colors.surface,
@@ -525,7 +553,7 @@ function NewsCard({ item, index, sport }: { item: EspnNewsItem; index: number; s
           <TouchableOpacity onPress={handleAskAI} activeOpacity={0.7} style={newsCardStyles.askBtn}>
             <Ionicons name="flash" size={14} color={colors.green} />
             <Text variant="labelSmall" style={{ color: colors.green }}>
-              {showAI && aiTake ? 'Hide AI take' : 'Ask AI'}
+              {showAI && aiTake ? 'Hide' : 'Get the read'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -588,12 +616,68 @@ const newsCardStyles = StyleSheet.create({
   },
 });
 
+// Pulls real stat leaders from each sport's official free API.
+async function loadTrendingStars(sport: SportId): Promise<Array<{ name: string; team: string; pos: string; statLabel: string; statValue: string }>> {
+  try {
+    if (sport === 'mlb') {
+      const [hr, avg] = await Promise.all([
+        mlbStats.hittingLeaders('homeRuns', 8),
+        mlbStats.hittingLeaders('avg', 8),
+      ]);
+      const seen = new Set<string>();
+      const merged: Array<{ name: string; team: string; pos: string; statLabel: string; statValue: string }> = [];
+      hr.forEach(l => { if (!seen.has(l.player.fullName)) { seen.add(l.player.fullName); merged.push({ name: l.player.fullName, team: l.team?.name ?? '—', pos: 'HIT', statLabel: 'HR', statValue: String(l.stat.homeRuns ?? '') }); }});
+      avg.forEach(l => { if (!seen.has(l.player.fullName)) { seen.add(l.player.fullName); merged.push({ name: l.player.fullName, team: l.team?.name ?? '—', pos: 'HIT', statLabel: 'AVG', statValue: String(l.stat.avg ?? '') }); }});
+      return merged.slice(0, 12);
+    }
+    if (sport === 'nhl') {
+      const [points, goals] = await Promise.all([
+        nhlStats.skaterLeaders('points'),
+        nhlStats.skaterLeaders('goals'),
+      ]);
+      const seen = new Set<string>();
+      const merged: Array<{ name: string; team: string; pos: string; statLabel: string; statValue: string }> = [];
+      points.forEach(l => {
+        const name = `${l.firstName?.default ?? ''} ${l.lastName?.default ?? ''}`.trim();
+        if (!seen.has(name)) { seen.add(name); merged.push({ name, team: l.teamAbbrev, pos: l.position, statLabel: 'PTS', statValue: String(l.value) }); }
+      });
+      goals.forEach(l => {
+        const name = `${l.firstName?.default ?? ''} ${l.lastName?.default ?? ''}`.trim();
+        if (!seen.has(name)) { seen.add(name); merged.push({ name, team: l.teamAbbrev, pos: l.position, statLabel: 'G', statValue: String(l.value) }); }
+      });
+      return merged.slice(0, 12);
+    }
+    if (sport === 'nba') {
+      const categories = await espn.leaders(sport);
+      const seen = new Set<string>();
+      const merged: Array<{ name: string; team: string; pos: string; statLabel: string; statValue: string }> = [];
+      categories.slice(0, 3).forEach(cat => {
+        cat.leaders.slice(0, 5).forEach(l => {
+          const name = l.athlete?.fullName || l.athlete?.displayName || '';
+          if (!name || seen.has(name)) return;
+          seen.add(name);
+          merged.push({
+            name,
+            team:      l.athlete?.team?.abbreviation ?? '—',
+            pos:       l.athlete?.position?.abbreviation ?? '—',
+            statLabel: cat.categoryName.split(' ')[0].toUpperCase().slice(0, 4),
+            statValue: l.displayValue,
+          });
+        });
+      });
+      return merged.slice(0, 12);
+    }
+  } catch { /* swallow */ }
+  return [];
+}
+
 export default function AddDropScreen() {
   const sport                         = useUserStore((s) => s.currentSport);
   const sportDef                      = SPORTS[sport];
   const [filter, setFilter]           = useState<FilterTab>('ALL');
   const [waiverTargets, setTargets]   = useState<WaiverTarget[]>([]);
   const [playerWatch, setPlayerWatch] = useState<EspnInjury[]>([]);
+  const [trendingStars, setTrendingStars] = useState<Array<{ name: string; team: string; pos: string; statLabel: string; statValue: string }>>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   const loadData = useCallback(async (sportId: SportId) => {
@@ -601,6 +685,7 @@ export default function AddDropScreen() {
     try {
       if (sportId === 'nfl') {
         setPlayerWatch([]);
+        setTrendingStars([]);
         const [adds, drops, players] = await Promise.all([
           sleeper.getTrendingAdds(20),
           sleeper.getTrendingDrops(8),
@@ -609,18 +694,18 @@ export default function AddDropScreen() {
         setTargets(buildTargets(adds, drops, players));
       } else {
         setTargets([]);
-        // Real player movement signals: anyone with an injury status is either a drop candidate
-        // (their owner wants out) or a "replace him" opportunity (grab the backup).
-        const injuries = await espn.injuries(sportId);
-        setPlayerWatch(
-          injuries
-            .filter(i => i.athlete && i.status)
-            .slice(0, 25),
-        );
+        // Real player movement signals + real stat leaders from official APIs.
+        const [injuries, stars] = await Promise.all([
+          espn.injuries(sportId),
+          loadTrendingStars(sportId),
+        ]);
+        setPlayerWatch(injuries.filter(i => i.athlete && i.status).slice(0, 15));
+        setTrendingStars(stars);
       }
     } catch {
       setTargets([]);
       setPlayerWatch([]);
+      setTrendingStars([]);
     } finally {
       setDataLoading(false);
     }
@@ -735,17 +820,60 @@ export default function AddDropScreen() {
                 </Text>
               </View>
             )
-          ) : playerWatch.length > 0 ? (
-            playerWatch.map((item, i) => (
-              <PlayerWatchCard key={`${item.athlete.id}-${item.id}`} item={item} index={i} sport={sport} />
-            ))
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🏥</Text>
-              <Text variant="body" color={colors.textSecondary} align="center">
-                No active {sportDef.shortLabel} player movement right now.
-              </Text>
-            </View>
+            <>
+              {trendingStars.length > 0 && (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm, marginTop: spacing.xs }}>
+                    <Text style={{ fontSize: 16 }}>🔥</Text>
+                    <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1 }}>
+                      WHO'S HOT — REAL {sportDef.shortLabel} LEADERS
+                    </Text>
+                  </View>
+                  <View style={{ gap: 6, marginBottom: spacing.lg }}>
+                    {trendingStars.map((s, i) => (
+                      <View key={`${s.name}-${i}`} style={trendingStyles.row}>
+                        <View style={trendingStyles.rank}>
+                          <Text variant="labelSmall" color={colors.textTertiary}>#{i + 1}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text variant="bodySmallMedium" color={colors.textPrimary} numberOfLines={1}>
+                            {s.name}
+                          </Text>
+                          <Text variant="caption" color={colors.textTertiary}>{s.team} · {s.pos}</Text>
+                        </View>
+                        <View style={trendingStyles.statPill}>
+                          <Text variant="labelSmall" style={{ color: colors.green }}>
+                            {s.statValue} {s.statLabel}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {playerWatch.length > 0 ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
+                    <Text style={{ fontSize: 16 }}>🏥</Text>
+                    <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1 }}>
+                      INJURY MOVEMENT
+                    </Text>
+                  </View>
+                  {playerWatch.map((item, i) => (
+                    <PlayerWatchCard key={`${item.athlete.id}-${item.id}`} item={item} index={i} sport={sport} />
+                  ))}
+                </>
+              ) : trendingStars.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyEmoji}>🏥</Text>
+                  <Text variant="body" color={colors.textSecondary} align="center">
+                    No active {sportDef.shortLabel} data right now.
+                  </Text>
+                </View>
+              ) : null}
+            </>
           )}
 
           <View style={styles.bottomSpacer} />
