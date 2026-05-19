@@ -61,16 +61,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Find built .app
-        id: find_app
+      - name: Find and package built .app
         run: |
           APP_PATH=$(find ios/build/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
-          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found"; exit 1
+          fi
           echo "Found: $APP_PATH"
+          # Tar preserves the .app directory structure (Info.plist, frameworks, resources).
+          # Upload-artifact otherwise flattens directories which corrupts .app bundles.
+          mkdir -p artifact
+          tar -czf artifact/DraftIQ.app.tar.gz -C "$(dirname "$APP_PATH")" "$(basename "$APP_PATH")"
+          ls -lh artifact/
 
       - name: Upload .app artifact
         uses: actions/upload-artifact@v4
         with:
           name: DraftIQ-Simulator-App
-          path: ${{ steps.find_app.outputs.app_path }}
+          path: artifact/DraftIQ.app.tar.gz
           retention-days: 7
