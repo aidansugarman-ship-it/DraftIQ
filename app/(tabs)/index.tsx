@@ -37,7 +37,6 @@ import { ConfidenceStars } from '@components/shared/ConfidenceStars';
 import { useStreakStore } from '@store/useStreakStore';
 import { gemini } from '@services/gemini';
 import { ActivityIndicator } from 'react-native';
-import { useCallback } from 'react';
 import { SportTint } from '@components/shared/SportTint';
 import { TeamLogo } from '@components/shared/TeamLogo';
 import { PlayerAvatar } from '@components/shared/PlayerAvatar';
