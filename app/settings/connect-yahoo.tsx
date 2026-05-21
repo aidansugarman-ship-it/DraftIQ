@@ -14,16 +14,22 @@ import { Button } from '@components/ui/Button';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { useYahooAuth, isYahooConnected, disconnectYahoo } from '@services/yahooAuth';
-import { yahooFantasy, type YahooLeague } from '@services/yahooFantasy';
+import { yahooFantasy, type YahooLeagueWithTeam } from '@services/yahooFantasy';
+import { useYahooStore } from '@store/useYahooStore';
+import type { SportId } from '@constants/sports';
 import { EmptyState } from '@components/shared/EmptyState';
 
 export default function ConnectYahooScreen() {
   const { isReady, promptAsync } = useYahooAuth();
   const [connected, setConnected] = useState(false);
   const [checking, setChecking]   = useState(true);
-  const [leagues, setLeagues]     = useState<YahooLeague[]>([]);
+  const [leagues, setLeagues]     = useState<YahooLeagueWithTeam[]>([]);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
+
+  const active      = useYahooStore(s => s.active);
+  const setActive   = useYahooStore(s => s.setActive);
+  const clearAll    = useYahooStore(s => s.clearAll);
 
   useEffect(() => {
     isYahooConnected().then(isOn => {
@@ -37,13 +43,35 @@ export default function ConnectYahooScreen() {
     setLoading(true);
     setError('');
     try {
-      const ls = await yahooFantasy.myLeagues();
+      const ls = await yahooFantasy.myLeaguesWithTeams();
       setLeagues(ls);
+      // Auto-select the most-recent league for any sport with nothing picked yet.
+      const current = useYahooStore.getState().active;
+      (['nfl', 'nba', 'mlb', 'nhl'] as SportId[]).forEach((sport) => {
+        if (current[sport]) return;
+        const forSport = ls
+          .filter(l => l.sport === sport)
+          .sort((a, b) => Number(b.season) - Number(a.season));
+        if (forSport[0]) selectLeague(forSport[0]);
+      });
     } catch (e: any) {
       setError(e?.message ?? 'Could not load leagues');
     } finally {
       setLoading(false);
     }
+  }
+
+  function selectLeague(l: YahooLeagueWithTeam) {
+    setActive(l.sport as SportId, {
+      leagueKey:   l.leagueKey,
+      leagueName:  l.name,
+      teamKey:     l.teamKey,
+      teamName:    l.teamName,
+      sport:       l.sport as SportId,
+      numTeams:    l.numTeams,
+      scoringType: l.scoringType,
+      season:      l.season,
+    });
   }
 
   async function connect() {
@@ -64,6 +92,7 @@ export default function ConnectYahooScreen() {
 
   async function disconnect() {
     await disconnectYahoo();
+    clearAll();
     setConnected(false);
     setLeagues([]);
   }
@@ -126,16 +155,35 @@ export default function ConnectYahooScreen() {
                   <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm }}>
                     YOUR LEAGUES
                   </Text>
-                  {leagues.map((l) => (
-                    <View key={l.leagueKey} style={styles.leagueCard}>
-                      <View style={{ flex: 1 }}>
-                        <Text variant="bodyMedium" color={colors.textPrimary}>{l.name}</Text>
-                        <Text variant="caption" color={colors.textTertiary}>
-                          {l.sport.toUpperCase()} · {l.numTeams}-team · {l.season} · {l.scoringType}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                  <Text variant="caption" color={colors.textTertiary} style={{ marginBottom: spacing.sm }}>
+                    Tap a league to make it active — DraftIQ builds your roster, power rankings, trades & takes around it.
+                  </Text>
+                  {leagues.map((l) => {
+                    const isActive = active[l.sport as SportId]?.leagueKey === l.leagueKey;
+                    return (
+                      <TouchableOpacity
+                        key={l.leagueKey}
+                        style={[styles.leagueCard, isActive && styles.leagueCardActive]}
+                        activeOpacity={0.75}
+                        onPress={() => selectLeague(l)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text variant="bodyMedium" color={colors.textPrimary}>{l.name}</Text>
+                          <Text variant="caption" color={colors.textTertiary}>
+                            {l.sport.toUpperCase()} · {l.numTeams}-team · {l.season} · {l.scoringType}
+                          </Text>
+                          <Text variant="caption" color={isActive ? colors.green : colors.textTertiary} style={{ marginTop: 2 }}>
+                            {l.teamName ? `Your team: ${l.teamName}` : 'Team not found'}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={isActive ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={22}
+                          color={isActive ? colors.green : colors.textTertiary}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
 
@@ -202,11 +250,16 @@ const styles = StyleSheet.create({
   leagueCard: {
     flexDirection: 'row',
     alignItems:    'center',
+    gap:           spacing.sm,
     padding:       spacing.base,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.sm,
+  },
+  leagueCardActive: {
+    borderColor:     `${colors.green}80`,
+    backgroundColor: `${colors.green}12`,
   },
 });

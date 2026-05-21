@@ -51,13 +51,13 @@ export default function SportScreen() {
 
   const handleContinue = () => {
     setPreferredSports(selected);
-    router.push('/(onboarding)/experience');
+    router.push('/(onboarding)/connect-yahoo');
   };
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={1} totalSteps={5} showBack={false} />
+        <OnboardingProgress step={1} totalSteps={6} showBack={false} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}

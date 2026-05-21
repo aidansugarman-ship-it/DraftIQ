@@ -11,8 +11,10 @@ import { espn, EspnNewsItem, EspnInjury } from '@services/espn';
 import { mlbStats } from '@services/mlbStats';
 import { nhlStats } from '@services/nhlStats';
 import { gemini } from '@services/gemini';
+import { yahooFantasy, type YahooRosterPlayer } from '@services/yahooFantasy';
 import { router } from 'expo-router';
 import { useUserStore } from '@store/useUserStore';
+import { useYahooStore } from '@store/useYahooStore';
 import { SPORTS, type SportId } from '@constants/sports';
 import { SportSwitcher } from '@components/ui/SportSwitcher';
 import { SportTint } from '@components/shared/SportTint';
@@ -616,6 +618,127 @@ const newsCardStyles = StyleSheet.create({
   },
 });
 
+// ─── Yahoo waiver wire — the user's REAL league free agents ───────────────────
+
+function YahooWaiverRow({ player, index, sportLabel }: { player: YahooRosterPlayer; index: number; sportLabel: string }) {
+  const [aiTake, setAiTake]       = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAI, setShowAI]       = useState(false);
+
+  const handleAsk = useCallback(() => {
+    if (aiTake) { setShowAI(v => !v); return; }
+    setShowAI(true);
+    setAiLoading(true);
+    gemini.addDropAdvice(player.name, 'your weakest bench player', sportLabel)
+      .then(setAiTake)
+      .catch(() => setAiTake('AI take unavailable right now.'))
+      .finally(() => setAiLoading(false));
+  }, [aiTake, player, sportLabel]);
+
+  const op = useSharedValue(0);
+  const ty = useSharedValue(10);
+  useEffect(() => {
+    op.value = withDelay(index * 45, withTiming(1, { duration: 320 }));
+    ty.value = withDelay(index * 45, withTiming(0, { duration: 320, easing: Easing.out(Easing.quad) }));
+  }, []);
+  const anim = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
+
+  return (
+    <Animated.View style={anim}>
+      <View style={yahooWaiverStyles.wrap}>
+        <TouchableOpacity onPress={handleAsk} activeOpacity={0.85} style={yahooWaiverStyles.top}>
+          <View style={yahooWaiverStyles.rank}>
+            <Text variant="labelSmall" color={colors.textTertiary}>#{index + 1}</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1}>{player.name}</Text>
+            <Text variant="caption" color={colors.textTertiary}>
+              {player.position} · {player.team || 'FA'}{player.status ? ` · ${player.status}` : ''}
+            </Text>
+          </View>
+          <View style={yahooWaiverStyles.faPill}>
+            <Text variant="labelSmall" style={{ color: colors.green, fontSize: 10 }}>AVAILABLE</Text>
+          </View>
+          <Ionicons name={showAI ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textTertiary} />
+        </TouchableOpacity>
+        {showAI && (
+          <View style={yahooWaiverStyles.aiBox}>
+            <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8, marginBottom: 4 }}>
+              SHOULD YOU ADD?
+            </Text>
+            {aiLoading
+              ? <ActivityIndicator size="small" color={colors.green} />
+              : <Text variant="bodySmall" color={colors.textSecondary}>{aiTake}</Text>}
+          </View>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+function YahooWaiverSection({ sport }: { sport: SportId }) {
+  const active = useYahooStore(s => s.active[sport]);
+  const [players, setPlayers] = useState<YahooRosterPlayer[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    setLoading(true);
+    setErrored(false);
+    yahooFantasy.freeAgents(active.leagueKey, 20)
+      .then(ps => { if (!cancelled) setPlayers(ps); })
+      .catch(() => { if (!cancelled) setErrored(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [active?.leagueKey]);
+
+  if (!active) return null;
+
+  return (
+    <View style={{ marginBottom: spacing.lg }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
+        <Text style={{ fontSize: 16 }}>📋</Text>
+        <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1, flex: 1 }}>
+          YOUR WAIVER WIRE · {active.leagueName.toUpperCase()}
+        </Text>
+      </View>
+      {loading ? (
+        <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color={colors.green} />
+        </View>
+      ) : errored || players.length === 0 ? (
+        <Text variant="bodySmall" color={colors.textTertiary}>
+          No available players found in your league right now.
+        </Text>
+      ) : (
+        players.map((p, i) => (
+          <YahooWaiverRow key={p.playerKey} player={p} index={i} sportLabel={SPORTS[sport].shortLabel} />
+        ))
+      )}
+    </View>
+  );
+}
+
+const yahooWaiverStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor: colors.surface, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
+    marginBottom: spacing.sm, overflow: 'hidden',
+  },
+  top: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.base },
+  rank: { width: 28, alignItems: 'center' },
+  faPill: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+    backgroundColor: `${colors.green}14`, borderWidth: 1, borderColor: `${colors.green}40`,
+  },
+  aiBox: {
+    paddingHorizontal: spacing.base, paddingBottom: spacing.base, paddingTop: spacing.xs,
+    borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: `${colors.green}06`,
+  },
+});
+
 // Pulls real stat leaders from each sport's official free API.
 async function loadTrendingStars(sport: SportId): Promise<Array<{ name: string; team: string; pos: string; statLabel: string; statValue: string }>> {
   try {
@@ -759,6 +882,9 @@ export default function AddDropScreen() {
               </View>
             </View>
           </Animated.View>
+
+          {/* Real Yahoo waiver wire for the user's connected league */}
+          <YahooWaiverSection sport={sport} />
 
           {/* Summary pills + filter tabs — NFL only (waiver flow) */}
           {sport === 'nfl' && (

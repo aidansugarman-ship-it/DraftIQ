@@ -1,27 +1,7 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform, Text as RNText } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { colors } from '@constants/colors';
-
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
-interface IconTabProps {
-  name:     IoniconName;
-  focused:  boolean;
-}
-
-function IconTab({ name, focused }: IconTabProps) {
-  return (
-    <View style={[tabStyles.wrap, focused && tabStyles.wrapActive]}>
-      <Ionicons
-        name={name}
-        size={22}
-        color={focused ? colors.green : colors.textTertiary}
-      />
-    </View>
-  );
-}
 
 function EmojiTab({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
@@ -50,14 +30,8 @@ export default function TabsLayout() {
           ),
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <IconTab name={focused ? 'home' : 'home-outline'} focused={focused} />
-          ),
-        }}
-      />
+      {/* No home screen — index just redirects to the primary sport. */}
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
         name="nfl"
         options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="🏈" focused={focused} /> }}

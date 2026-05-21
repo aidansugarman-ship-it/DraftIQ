@@ -70,9 +70,11 @@ export default function RosterScreen() {
             <EmptyState
               emoji="🏟️"
               title="No league connected"
-              body="Connect your Sleeper league to see your real roster with start/sit AI takes."
-              ctaLabel="Connect Sleeper"
-              onCta={() => router.push('/settings/connect-sleeper')}
+              body={sport === 'nfl'
+                ? 'Connect Yahoo or Sleeper to see your real roster with start/sit takes.'
+                : 'Connect your Yahoo league to see your real roster with start/sit takes.'}
+              ctaLabel="Connect Yahoo"
+              onCta={() => router.push('/settings/connect-yahoo')}
             />
           ) : loading ? (
             <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
@@ -157,13 +159,11 @@ function PlayerRow({ player, index }: { player: RosterPlayer; index: number }) {
     if (aiTake) { setExpanded((v) => !v); return; }
     setExpanded(true);
     setAiLoading(true);
-    const verb = player.isStarter ? 'START' : 'SIT/PICKUP';
-    const prompt = `${player.name} (${player.position}, ${player.team})${player.injury ? ` — currently ${player.injury.status}` : ''}. Should I ${verb} him this week? Quick verdict + one-line reasoning.`;
-    gemini.playerAnalysis(player.name, player.position, player.team, 'NFL')
+    gemini.playerAnalysis(player.name, player.position, player.team, sport.toUpperCase())
       .then(setAiTake)
       .catch(() => setAiTake('AI take unavailable.'))
       .finally(() => setAiLoading(false));
-  }, [aiTake, player]);
+  }, [aiTake, player, sport]);
 
   return (
     <View style={[playerStyles.card, player.injury && playerStyles.cardInjured]}>

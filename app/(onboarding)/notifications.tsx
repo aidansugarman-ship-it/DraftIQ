@@ -121,7 +121,7 @@ export default function NotificationsScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={5} totalSteps={5} />
+        <OnboardingProgress step={6} totalSteps={6} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}

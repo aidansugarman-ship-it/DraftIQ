@@ -11,6 +11,7 @@ import { Text } from '@components/ui/Text';
 import { SelectionCard } from '@components/shared/SelectionCard';
 import { OnboardingProgress } from '@components/shared/OnboardingProgress';
 import { OnboardingFooter } from '@components/shared/OnboardingFooter';
+import { TooNewButton } from '@components/shared/TooNewButton';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
@@ -55,7 +56,7 @@ export default function TeamStyleScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={3} totalSteps={5} showBack onBack={() => router.back()} />
+        <OnboardingProgress step={4} totalSteps={6} showBack onBack={() => router.back()} />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Animated.View style={[styles.header, heroStyle]}>
@@ -63,6 +64,9 @@ export default function TeamStyleScreen() {
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.subtitle}>
               Tunes every take to your roster philosophy. Change anytime.
             </Text>
+            <View style={{ marginTop: spacing.md }}>
+              <TooNewButton topic="the fantasy team-building styles: Win Now, Future Stars, Balanced, and Stars & Scrubs — what each one means and who it's for" />
+            </View>
           </Animated.View>
 
           <View style={styles.list}>

@@ -11,6 +11,7 @@ import { Text } from '@components/ui/Text';
 import { SelectionCard } from '@components/shared/SelectionCard';
 import { OnboardingProgress } from '@components/shared/OnboardingProgress';
 import { OnboardingFooter } from '@components/shared/OnboardingFooter';
+import { GlossaryTerm } from '@components/shared/GlossaryTerm';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
@@ -67,7 +68,7 @@ export default function ExperienceScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={2} totalSteps={5} showBack onBack={() => router.back()} />
+        <OnboardingProgress step={3} totalSteps={6} showBack onBack={() => router.back()} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -97,9 +98,17 @@ export default function ExperienceScreen() {
                     </Text>
                   </View>
                 </View>
-                <Text variant="bodySmall" color={colors.textSecondary} style={styles.desc}>
-                  {opt.desc}
-                </Text>
+                {opt.id === 'experienced' ? (
+                  <Text variant="bodySmall" color={colors.textSecondary} style={styles.desc}>
+                    Skip the basics. AI calls are sharp and assume you know terms like{' '}
+                    <GlossaryTerm term="ADP" />, <GlossaryTerm term="target share" />,{' '}
+                    <GlossaryTerm term="BABIP" /> and <GlossaryTerm term="xG" />. Get the takes, not the textbook.
+                  </Text>
+                ) : (
+                  <Text variant="bodySmall" color={colors.textSecondary} style={styles.desc}>
+                    {opt.desc}
+                  </Text>
+                )}
               </SelectionCard>
             ))}
           </View>

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { sleeper, type SleeperPlayer, type SleeperRoster, type SleeperUser } from '@services/sleeper';
+import { sleeper, type SleeperPlayer, type SleeperUser } from '@services/sleeper';
+import { yahooFantasy } from '@services/yahooFantasy';
 import { gemini } from '@services/gemini';
 import { useUserStore } from '@store/useUserStore';
+import { useYahooStore } from '@store/useYahooStore';
+import type { SportId } from '@constants/sports';
 
 export interface RankedTeam {
   rank:        number;
@@ -16,72 +19,26 @@ export interface RankedTeam {
 const cache: Record<string, { ts: number; data: RankedTeam[] }> = {};
 const CACHE_MS = 1000 * 60 * 60 * 6; // 6 hours
 
-/**
- * Generates AI-driven power rankings for the user's Sleeper league.
- * Uses real roster data + records + AI synthesis.
- */
-export function usePowerRankings() {
-  const user = useUserStore(s => s.user);
-  const sleeperLeague = user?.connectedLeagues?.find(l => l.platform === 'sleeper');
-  const leagueId = sleeperLeague?.leagueId;
+interface SeedTeam {
+  teamName: string;
+  ownerId:  string;
+  wins:     number;
+  losses:   number;
+  ties:     number;
+  fpts:     number;
+  starters: string[];
+}
 
-  const [rankings, setRankings] = useState<RankedTeam[]>(leagueId ? (cache[leagueId]?.data ?? []) : []);
-  const [loading, setLoading]   = useState(!!leagueId && !cache[leagueId]);
-  const [error, setError]       = useState<string | null>(null);
+/** Turn a list of ranked seed teams into a Gemini-driven power ranking. */
+async function rankWithAI(teams: SeedTeam[], sportLabel: string): Promise<RankedTeam[]> {
+  const teamSummaries = teams
+    .map((t, i) => `${i + 1}. ${t.teamName} (${t.wins}-${t.losses}${t.ties ? `-${t.ties}` : ''}${t.fpts ? `, ${t.fpts.toFixed(1)} pts` : ''})${t.starters.length ? ` — Key players: ${t.starters.join(', ')}` : ''}`)
+    .join('\n');
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!leagueId) { setRankings([]); setLoading(false); return; }
-
-    const cached = cache[leagueId];
-    if (cached && Date.now() - cached.ts < CACHE_MS) {
-      setRankings(cached.data);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    (async () => {
-      try {
-        const [rosters, users, allPlayers] = await Promise.all([
-          sleeper.getRosters(leagueId),
-          sleeper.getUsers(leagueId),
-          sleeper.getAllPlayers(),
-        ]);
-
-        const teams = rosters.map((r): { teamName: string; ownerId: string; wins: number; losses: number; ties: number; fpts: number; starters: string[] } => {
-          const usr = users.find((u: SleeperUser) => u.user_id === r.owner_id);
-          const starterNames = (r.starters ?? [])
-            .map(pid => {
-              const p = (allPlayers as any)[pid] as SleeperPlayer | undefined;
-              return p ? `${p.full_name || pid} (${p.position}, ${p.team ?? 'FA'})` : null;
-            })
-            .filter(Boolean) as string[];
-          return {
-            teamName: usr?.display_name || `Team ${r.roster_id}`,
-            ownerId:  r.owner_id,
-            wins:     r.settings?.wins ?? 0,
-            losses:   r.settings?.losses ?? 0,
-            ties:     r.settings?.ties ?? 0,
-            fpts:     (r.settings?.fpts ?? 0) + (r.settings?.fpts_decimal ?? 0) / 100,
-            starters: starterNames.slice(0, 9),
-          };
-        });
-
-        // Sort by record + points for seed data
-        teams.sort((a, b) => {
-          if (b.wins !== a.wins) return b.wins - a.wins;
-          return b.fpts - a.fpts;
-        });
-
-        const teamSummaries = teams.map((t, i) => `${i + 1}. ${t.teamName} (${t.wins}-${t.losses}, ${t.fpts.toFixed(1)} pts) — Starters: ${t.starters.join(', ')}`).join('\n');
-
-        const prompt = `You are ranking the teams in this fantasy NFL league. Use record + points + roster strength + age curve. Output EXACT JSON, no commentary outside it:
+  const prompt = `You are ranking the teams in this fantasy ${sportLabel} league. Use record + points + roster strength. Output EXACT JSON, no commentary outside it:
 
 [
-  {"rank": 1, "teamName": "exact team name from data", "topPlayers": ["3 standout starters"], "reasoning": "Why this team is at this rank — 2 punchy sentences. ALL CAPS verdict word.", "trend": "up|down|same"},
+  {"rank": 1, "teamName": "exact team name from data", "topPlayers": ["up to 3 standout players"], "reasoning": "Why this team is at this rank — 2 punchy sentences. ALL CAPS verdict word.", "trend": "up|down|same"},
   ...
 ]
 
@@ -95,26 +52,117 @@ REQUIREMENTS:
 LEAGUE DATA:
 ${teamSummaries}`;
 
-        const raw = await gemini.chat(prompt, 'NFL');
-        const match = raw.match(/\[[\s\S]*\]/);
-        if (!match) throw new Error('No JSON array in response');
-        const parsed = JSON.parse(match[0]);
+  const raw = await gemini.chat(prompt, sportLabel);
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error('No JSON array in response');
+  const parsed = JSON.parse(match[0]);
 
-        const ranked: RankedTeam[] = teams.map((t, i) => {
-          const ai = parsed.find((p: any) => p.teamName?.toLowerCase() === t.teamName.toLowerCase()) ?? parsed[i] ?? {};
-          return {
-            rank:       ai.rank ?? i + 1,
-            teamName:   t.teamName,
-            ownerId:    t.ownerId,
-            record:     `${t.wins}-${t.losses}${t.ties ? `-${t.ties}` : ''}`,
-            topPlayers: Array.isArray(ai.topPlayers) ? ai.topPlayers.slice(0, 3) : t.starters.slice(0, 3),
-            reasoning:  ai.reasoning || 'No read on this team yet.',
-            trend:      ['up', 'down', 'same'].includes(ai.trend) ? ai.trend : 'same',
-          };
-        }).sort((a, b) => a.rank - b.rank);
+  return teams
+    .map((t, i) => {
+      const ai = parsed.find((p: any) => p.teamName?.toLowerCase() === t.teamName.toLowerCase()) ?? parsed[i] ?? {};
+      return {
+        rank:       ai.rank ?? i + 1,
+        teamName:   t.teamName,
+        ownerId:    t.ownerId,
+        record:     `${t.wins}-${t.losses}${t.ties ? `-${t.ties}` : ''}`,
+        topPlayers: Array.isArray(ai.topPlayers) ? ai.topPlayers.slice(0, 3) : t.starters.slice(0, 3),
+        reasoning:  ai.reasoning || 'No read on this team yet.',
+        trend:      ['up', 'down', 'same'].includes(ai.trend) ? ai.trend : 'same',
+      } as RankedTeam;
+    })
+    .sort((a, b) => a.rank - b.rank);
+}
 
+/**
+ * AI-driven power rankings for the user's active league in the CURRENT sport.
+ * Uses the active Yahoo league if one is set, otherwise a connected Sleeper NFL league.
+ */
+export function usePowerRankings(sportOverride?: SportId) {
+  const user        = useUserStore(s => s.user);
+  const storeSport  = useUserStore(s => s.currentSport);
+  const sport       = sportOverride ?? storeSport;
+  const yahooActive = useYahooStore(s => s.active[sport]);
+
+  const sleeperLeague = sport === 'nfl'
+    ? user?.connectedLeagues?.find(l => l.platform === 'sleeper')
+    : undefined;
+
+  const source: 'yahoo' | 'sleeper' | null = yahooActive ? 'yahoo' : sleeperLeague ? 'sleeper' : null;
+  const cacheKey = yahooActive?.leagueKey ?? sleeperLeague?.leagueId ?? '';
+
+  const [rankings, setRankings] = useState<RankedTeam[]>(cacheKey ? (cache[cacheKey]?.data ?? []) : []);
+  const [loading, setLoading]   = useState<boolean>(!!cacheKey && !cache[cacheKey]);
+  const [error, setError]       = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!source || !cacheKey) { setRankings([]); setLoading(false); return; }
+
+    const cached = cache[cacheKey];
+    if (cached && Date.now() - cached.ts < CACHE_MS) {
+      setRankings(cached.data);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        let seed: SeedTeam[];
+
+        if (source === 'yahoo' && yahooActive) {
+          const teams = await yahooFantasy.leagueTeams(yahooActive.leagueKey);
+          // Pull each team's top roster players in parallel (best-effort).
+          const rosters = await Promise.all(
+            teams.map(t =>
+              yahooFantasy.teamRoster(t.teamKey)
+                .then(ps => ps.slice(0, 6).map(p => `${p.name} (${p.position})`))
+                .catch(() => [] as string[]),
+            ),
+          );
+          seed = teams.map((t, i) => ({
+            teamName: t.name || `Team ${i + 1}`,
+            ownerId:  t.teamKey,
+            wins:     t.wins   ?? 0,
+            losses:   t.losses ?? 0,
+            ties:     t.ties   ?? 0,
+            fpts:     0,
+            starters: rosters[i] ?? [],
+          }));
+          seed.sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses));
+        } else {
+          const leagueId = sleeperLeague!.leagueId;
+          const [rosters, users, allPlayers] = await Promise.all([
+            sleeper.getRosters(leagueId),
+            sleeper.getUsers(leagueId),
+            sleeper.getAllPlayers(),
+          ]);
+          seed = rosters.map((r): SeedTeam => {
+            const usr = users.find((u: SleeperUser) => u.user_id === r.owner_id);
+            const starterNames = (r.starters ?? [])
+              .map(pid => {
+                const p = (allPlayers as any)[pid] as SleeperPlayer | undefined;
+                return p ? `${p.full_name || pid} (${p.position}, ${p.team ?? 'FA'})` : null;
+              })
+              .filter(Boolean) as string[];
+            return {
+              teamName: usr?.display_name || `Team ${r.roster_id}`,
+              ownerId:  r.owner_id,
+              wins:     r.settings?.wins ?? 0,
+              losses:   r.settings?.losses ?? 0,
+              ties:     r.settings?.ties ?? 0,
+              fpts:     (r.settings?.fpts ?? 0) + (r.settings?.fpts_decimal ?? 0) / 100,
+              starters: starterNames.slice(0, 9),
+            };
+          });
+          seed.sort((a, b) => (b.wins - a.wins) || (b.fpts - a.fpts));
+        }
+
+        const ranked = await rankWithAI(seed, sport.toUpperCase());
         if (cancelled) return;
-        cache[leagueId] = { ts: Date.now(), data: ranked };
+        cache[cacheKey] = { ts: Date.now(), data: ranked };
         setRankings(ranked);
       } catch (e: any) {
         if (cancelled) return;
@@ -125,7 +173,7 @@ ${teamSummaries}`;
     })();
 
     return () => { cancelled = true; };
-  }, [leagueId]);
+  }, [source, cacheKey]);
 
-  return { rankings, loading, error, hasLeague: !!leagueId };
+  return { rankings, loading, error, hasLeague: !!source };
 }

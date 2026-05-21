@@ -39,6 +39,20 @@ export interface YahooTeam {
   ties?:    number;
 }
 
+export interface YahooMyTeam {
+  teamKey:   string;  // "nfl.l.123.t.4"
+  teamId:    string;
+  leagueKey: string;  // "nfl.l.123" — derived from teamKey
+  teamName:  string;
+  sport:     YahooLeague['sport'];
+}
+
+/** A league the user is in, with their own team inside it merged in. */
+export interface YahooLeagueWithTeam extends YahooLeague {
+  teamKey:  string;
+  teamName: string;
+}
+
 export interface YahooRosterPlayer {
   playerKey:   string;
   name:        string;
@@ -81,6 +95,54 @@ export const yahooFantasy = {
     return leagues;
   },
 
+  /** The user's OWN team in every league they're in, across all 4 sports. */
+  async myTeams(): Promise<YahooMyTeam[]> {
+    const data = await get('/users;use_login=1/games/teams');
+    const teams: YahooMyTeam[] = [];
+    try {
+      const games = data.fantasy_content?.users?.['0']?.user?.[1]?.games ?? {};
+      Object.values(games).forEach((g: any) => {
+        if (!g?.game) return;
+        const gameMeta = g.game[0];
+        const sport = (gameMeta?.code || '').toLowerCase() as YahooLeague['sport'];
+        const teamsNode = g.game[1]?.teams ?? {};
+        Object.values(teamsNode).forEach((t: any) => {
+          if (!t?.team) return;
+          const meta = t.team[0];
+          let teamKey = '', teamId = '', teamName = '';
+          (meta as any[]).forEach((entry: any) => {
+            if (entry?.team_key) teamKey  = entry.team_key;
+            if (entry?.team_id)  teamId   = entry.team_id;
+            if (entry?.name)     teamName = entry.name;
+          });
+          if (!teamKey) return;
+          // teamKey "nfl.l.123.t.4" → leagueKey "nfl.l.123"
+          const leagueKey = teamKey.replace(/\.t\.\d+$/, '');
+          teams.push({ teamKey, teamId, leagueKey, teamName, sport });
+        });
+      });
+    } catch (e) {
+      console.error('[yahooFantasy.myTeams] parse error', e);
+    }
+    return teams;
+  },
+
+  /** Leagues the user is in, each merged with the user's own team in it. */
+  async myLeaguesWithTeams(): Promise<YahooLeagueWithTeam[]> {
+    const [leagues, myTeams] = await Promise.all([
+      this.myLeagues(),
+      this.myTeams(),
+    ]);
+    return leagues.map((l) => {
+      const mine = myTeams.find(t => t.leagueKey === l.leagueKey);
+      return {
+        ...l,
+        teamKey:  mine?.teamKey  ?? '',
+        teamName: mine?.teamName ?? 'My Team',
+      };
+    });
+  },
+
   /** All teams in a specific league (for power rankings). */
   async leagueTeams(leagueKey: string): Promise<YahooTeam[]> {
     const data = await get(`/league/${leagueKey}/teams/standings`);
@@ -112,6 +174,34 @@ export const yahooFantasy = {
       console.error('[yahooFantasy.leagueTeams] parse error', e);
     }
     return teams;
+  },
+
+  /** Available players (free agents + waivers) in a league — the real waiver wire. */
+  async freeAgents(leagueKey: string, count = 25): Promise<YahooRosterPlayer[]> {
+    const data = await get(`/league/${leagueKey}/players;status=A;count=${count}`);
+    const players: YahooRosterPlayer[] = [];
+    try {
+      const playersNode = data.fantasy_content?.league?.[1]?.players ?? {};
+      Object.values(playersNode).forEach((p: any) => {
+        if (!p?.player) return;
+        const meta = p.player[0];
+        const player: YahooRosterPlayer = {
+          playerKey: '', name: '', position: '', team: '',
+          selectedPos: 'FA',
+        };
+        (meta as any[]).forEach((entry: any) => {
+          if (entry?.player_key)          player.playerKey = entry.player_key;
+          if (entry?.name?.full)          player.name      = entry.name.full;
+          if (entry?.display_position)    player.position  = entry.display_position;
+          if (entry?.editorial_team_abbr) player.team      = entry.editorial_team_abbr;
+          if (entry?.status)              player.status    = entry.status;
+        });
+        if (player.playerKey) players.push(player);
+      });
+    } catch (e) {
+      console.error('[yahooFantasy.freeAgents] parse error', e);
+    }
+    return players;
   },
 
   /** Current roster for one team. */

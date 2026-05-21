@@ -29,7 +29,9 @@ import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { canAccess } from '@constants/tiers';
 import { useUserStore } from '@store/useUserStore';
+import { useYahooStore } from '@store/useYahooStore';
 import { espn, EspnNewsItem } from '@services/espn';
+import { yahooFantasy, type YahooTeam, type YahooRosterPlayer } from '@services/yahooFantasy';
 import { SPORTS, type SportId } from '@constants/sports';
 import { SportSwitcher } from '@components/ui/SportSwitcher';
 import { SportTint } from '@components/shared/SportTint';
@@ -137,6 +139,27 @@ const POOLS_BY_SPORT: Record<SportId, TradePlayer[]> = {
 
 // Backwards-compat alias — defaults to NFL pool. The screen reads from POOLS_BY_SPORT[sport] at runtime.
 const PLAYER_POOL: TradePlayer[] = POOLS_BY_SPORT.nfl;
+
+// Map a real Yahoo roster player into the trade-builder's player shape.
+// We don't get a numeric trade value from Yahoo, so starters are weighted
+// higher than bench — the AI verdict does the real analysis.
+function yahooToTradePlayer(p: YahooRosterPlayer): TradePlayer {
+  const benched = ['BN', 'IL', 'IR', 'IL+', 'NA'].includes(p.selectedPos);
+  return {
+    id:    p.playerKey,
+    name:  p.name,
+    team:  p.team || 'FA',
+    pos:   p.position || '—',
+    value: benched ? 55 : 72,
+    score: benched ? 55 : 72,
+    age:   0,
+    bye:   0,
+  };
+}
+
+// Cache real Yahoo trade pools so reopening the picker isn't a fresh fetch storm.
+const yahooTradeCache: Record<string, { ts: number; players: TradePlayer[] }> = {};
+const YAHOO_TRADE_TTL = 1000 * 60 * 10;
 
 // ─── Mock verdict generator ───────────────────────────────────────────────────
 
@@ -261,17 +284,67 @@ function PickerModal({
   onSelect,
   excluded,
   sport,
+  side,
 }: {
   visible:  boolean;
   onClose:  () => void;
   onSelect: (p: TradePlayer) => void;
   excluded: string[];
   sport:    SportId;
+  side:     ModalSide;
 }) {
   const [query, setQuery] = useState('');
   const [posFilter, setPosFilter] = useState<string>('ALL');
+  const active = useYahooStore(s => s.active[sport]);
+  const [source, setSource] = useState<'league' | 'pool'>(active ? 'league' : 'pool');
+  const [yahooPlayers, setYahooPlayers] = useState<TradePlayer[]>([]);
+  const [yahooLoading, setYahooLoading] = useState(false);
 
-  const pool = POOLS_BY_SPORT[sport] ?? POOLS_BY_SPORT.nfl;
+  // Default to the real league whenever one is connected.
+  useEffect(() => { setSource(active ? 'league' : 'pool'); }, [active?.leagueKey]);
+
+  // Pull real Yahoo players for the side being filled.
+  useEffect(() => {
+    if (!visible || source !== 'league' || !active || !side) return;
+    const cacheKey = `${active.leagueKey}:${side}`;
+    const cached = yahooTradeCache[cacheKey];
+    if (cached && Date.now() - cached.ts < YAHOO_TRADE_TTL) {
+      setYahooPlayers(cached.players);
+      return;
+    }
+    let cancelled = false;
+    setYahooLoading(true);
+    (async () => {
+      try {
+        let players: TradePlayer[];
+        if (side === 'giving') {
+          // Your side of the trade — your own roster.
+          const roster = await yahooFantasy.teamRoster(active.teamKey);
+          players = roster.map(yahooToTradePlayer);
+        } else {
+          // The other side — everyone ELSE's players in the league.
+          const teams  = await yahooFantasy.leagueTeams(active.leagueKey);
+          const others = teams.filter(t => t.teamKey && t.teamKey !== active.teamKey);
+          const rosters = await Promise.all(
+            others.map(t => yahooFantasy.teamRoster(t.teamKey).catch(() => [])),
+          );
+          players = rosters.flat().map(yahooToTradePlayer);
+        }
+        if (cancelled) return;
+        yahooTradeCache[cacheKey] = { ts: Date.now(), players };
+        setYahooPlayers(players);
+      } catch {
+        if (!cancelled) setYahooPlayers([]);
+      } finally {
+        if (!cancelled) setYahooLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [visible, source, active?.leagueKey, active?.teamKey, side]);
+
+  const pool = source === 'league' && active
+    ? yahooPlayers
+    : (POOLS_BY_SPORT[sport] ?? POOLS_BY_SPORT.nfl);
   const positions = Array.from(new Set(pool.map(p => p.pos)));
 
   const filtered = pool.filter(p => {
@@ -288,11 +361,34 @@ function PickerModal({
       <View style={modal.sheet}>
         <View style={modal.handleBar} />
         <View style={modal.header}>
-          <Text variant="bodyMedium" color={colors.textPrimary}>Add Player</Text>
+          <Text variant="bodyMedium" color={colors.textPrimary}>
+            {side === 'giving' ? 'Add to YOUR side' : 'Add from the OTHER side'}
+          </Text>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
             <Ionicons name="close" size={20} color={colors.textTertiary} />
           </TouchableOpacity>
         </View>
+
+        {/* Source toggle — real league vs. the star pool for hypotheticals */}
+        {active && (
+          <View style={modal.sourceRow}>
+            {(['league', 'pool'] as const).map(src => (
+              <TouchableOpacity
+                key={src}
+                style={[modal.sourceTab, source === src && modal.sourceTabActive]}
+                onPress={() => setSource(src)}
+                activeOpacity={0.7}
+              >
+                <Text variant="labelSmall" style={{ color: source === src ? colors.textPrimary : colors.textTertiary }}>
+                  {src === 'league'
+                    ? (side === 'giving' ? 'MY ROSTER' : 'LEAGUE PLAYERS')
+                    : 'TOP PLAYERS'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         <View style={modal.searchWrap}>
           <Ionicons name="search" size={14} color={colors.textTertiary} style={{ marginRight: 6 }} />
           <TextInput
@@ -316,29 +412,45 @@ function PickerModal({
             </TouchableOpacity>
           ))}
         </ScrollView>
-        <FlatList
-          data={filtered}
-          keyExtractor={p => p.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={modal.playerRow}
-              onPress={() => { onSelect(item); onClose(); }}
-              activeOpacity={0.75}
-            >
-              <PosBadge pos={item.pos} />
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary}>{item.name}</Text>
-                <Text variant="caption" color={colors.textTertiary}>{item.team} · Age {item.age}</Text>
-              </View>
-              <View style={[modal.valBadge, { backgroundColor: item.value >= 85 ? `${colors.green}20` : `${colors.blue}15` }]}>
-                <Text variant="labelSmall" style={{ color: item.value >= 85 ? colors.green : colors.blue }}>{item.value}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          showsVerticalScrollIndicator={false}
-          style={{ maxHeight: 360 }}
-          contentContainerStyle={{ paddingBottom: spacing.xl }}
-        />
+        {yahooLoading ? (
+          <View style={{ paddingVertical: spacing['2xl'], alignItems: 'center' }}>
+            <Text variant="bodySmall" color={colors.textTertiary}>
+              Loading your league…
+            </Text>
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={{ paddingVertical: spacing['2xl'], alignItems: 'center' }}>
+            <Text variant="bodySmall" color={colors.textTertiary}>
+              No players found.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={p => p.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={modal.playerRow}
+                onPress={() => { onSelect(item); onClose(); }}
+                activeOpacity={0.75}
+              >
+                <PosBadge pos={item.pos} />
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium" color={colors.textPrimary}>{item.name}</Text>
+                  <Text variant="caption" color={colors.textTertiary}>
+                    {item.team}{item.age ? ` · Age ${item.age}` : ''}
+                  </Text>
+                </View>
+                <View style={[modal.valBadge, { backgroundColor: item.value >= 85 ? `${colors.green}20` : `${colors.blue}15` }]}>
+                  <Text variant="labelSmall" style={{ color: item.value >= 85 ? colors.green : colors.blue }}>{item.value}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            showsVerticalScrollIndicator={false}
+            style={{ maxHeight: 360 }}
+            contentContainerStyle={{ paddingBottom: spacing.xl }}
+          />
+        )}
       </View>
     </Animated.View>
   );
@@ -568,6 +680,131 @@ const tradeSignalStyles = StyleSheet.create({
   },
 });
 
+// ─── Yahoo league scout — real rosters of every team, to find trade targets ───
+
+function YahooLeagueScout({ sport }: { sport: SportId }) {
+  const active = useYahooStore(s => s.active[sport]);
+  const [teams, setTeams]               = useState<YahooTeam[]>([]);
+  const [loading, setLoading]           = useState(false);
+  const [expanded, setExpanded]         = useState<string | null>(null);
+  const [rosters, setRosters]           = useState<Record<string, YahooRosterPlayer[]>>({});
+  const [rosterLoading, setRosterLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    setLoading(true);
+    yahooFantasy.leagueTeams(active.leagueKey)
+      .then(t => { if (!cancelled) setTeams(t); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [active?.leagueKey]);
+
+  function toggleTeam(teamKey: string) {
+    if (expanded === teamKey) { setExpanded(null); return; }
+    setExpanded(teamKey);
+    if (!rosters[teamKey]) {
+      setRosterLoading(teamKey);
+      yahooFantasy.teamRoster(teamKey)
+        .then(ps => setRosters(prev => ({ ...prev, [teamKey]: ps })))
+        .catch(() => {})
+        .finally(() => setRosterLoading(null));
+    }
+  }
+
+  if (!active) return null;
+
+  return (
+    <View style={scoutStyles.section}>
+      <View style={scoutStyles.headerRow}>
+        <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1, flex: 1 }}>
+          SCOUT YOUR LEAGUE · {active.leagueName.toUpperCase()}
+        </Text>
+      </View>
+      <Text variant="caption" color={colors.textTertiary} style={{ marginBottom: spacing.sm }}>
+        Tap any team to see their real roster — find who's tradeable.
+      </Text>
+      {loading ? (
+        <View style={{ paddingVertical: spacing.lg, alignItems: 'center' }}>
+          <ActivityIndicatorTrade />
+        </View>
+      ) : (
+        teams.map((t) => (
+          <View key={t.teamKey} style={scoutStyles.teamCard}>
+            <TouchableOpacity
+              style={scoutStyles.teamRow}
+              activeOpacity={0.75}
+              onPress={() => toggleTeam(t.teamKey)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1}>{t.name}</Text>
+                {(t.wins != null) && (
+                  <Text variant="caption" color={colors.textTertiary}>
+                    {t.wins}-{t.losses ?? 0}{t.ties ? `-${t.ties}` : ''}
+                    {t.teamKey === active.teamKey ? ' · YOUR TEAM' : ''}
+                  </Text>
+                )}
+              </View>
+              <Ionicons
+                name={expanded === t.teamKey ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textTertiary}
+              />
+            </TouchableOpacity>
+            {expanded === t.teamKey && (
+              <View style={scoutStyles.rosterBox}>
+                {rosterLoading === t.teamKey ? (
+                  <ActivityIndicatorTrade />
+                ) : (rosters[t.teamKey] ?? []).length === 0 ? (
+                  <Text variant="caption" color={colors.textTertiary}>No roster data.</Text>
+                ) : (
+                  (rosters[t.teamKey] ?? []).map((p) => (
+                    <View key={p.playerKey} style={scoutStyles.playerRow}>
+                      <Text variant="caption" color={colors.textTertiary} style={{ width: 34 }}>
+                        {p.selectedPos}
+                      </Text>
+                      <Text variant="bodySmall" color={colors.textPrimary} numberOfLines={1} style={{ flex: 1 }}>
+                        {p.name}
+                      </Text>
+                      <Text variant="caption" color={colors.textTertiary}>
+                        {p.position} · {p.team}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
+
+function ActivityIndicatorTrade() {
+  return <Text variant="caption" color={colors.textTertiary}>Loading…</Text>;
+}
+
+const scoutStyles = StyleSheet.create({
+  section:   { marginBottom: spacing.lg },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  teamCard: {
+    backgroundColor: colors.surface, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
+    marginBottom: spacing.sm, overflow: 'hidden',
+  },
+  teamRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: spacing.base, gap: spacing.sm,
+  },
+  rosterBox: {
+    paddingHorizontal: spacing.base, paddingBottom: spacing.base,
+    borderTopWidth: 1, borderTopColor: colors.border, gap: 4, paddingTop: spacing.sm,
+  },
+  playerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 3 },
+});
+
 export default function TradeAnalyzerScreen() {
   const tier         = useUserStore(s => s.tier);
   const currentSport = useUserStore(s => s.currentSport);
@@ -629,8 +866,8 @@ export default function TradeAnalyzerScreen() {
     setPlayerReads({});
     try {
       const localVerdict = analyzeTradeLocally(giving, receiving);
-      const givingStr    = giving.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ');
-      const receivingStr = receiving.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ');
+      const givingStr    = giving.map(p => `${p.name} (${p.pos}, ${p.team})`).join(', ');
+      const receivingStr = receiving.map(p => `${p.name} (${p.pos}, ${p.team})`).join(', ');
 
       const prompt = `${sportLabel} fantasy trade review for ${scoringDesc}.
 GIVING: ${givingStr}
@@ -649,7 +886,7 @@ TikTok creator voice: confident, brief, opinionated. No fluff. No disclaimers.`;
       // Background: fetch per-player breakdowns (parallel, fire-and-forget)
       [...giving, ...receiving].forEach((p) => {
         const side = giving.includes(p) ? 'GIVING' : 'RECEIVING';
-        const sub  = `${sportLabel} fantasy take on ${p.name} (${p.position}, ${p.team}) in ${scoringDesc}. ONE punchy sentence on his current trade value and ONE on whether you'd want him on the ${side} side of this trade.`;
+        const sub  = `${sportLabel} fantasy take on ${p.name} (${p.pos}, ${p.team}) in ${scoringDesc}. ONE punchy sentence on his current trade value and ONE on whether you'd want him on the ${side} side of this trade.`;
         gemini.chat(sub, sportLabel)
           .then(read => setPlayerReads(prev => ({ ...prev, [p.id]: read })))
           .catch(() => {});
@@ -689,6 +926,9 @@ TikTok creator voice: confident, brief, opinionated. No fluff. No disclaimers.`;
               Add players to each side. AI evaluates value, risk, and dynasty implications.
             </Text>
           </Animated.View>
+
+          {/* Real Yahoo league rosters — scout trade targets */}
+          <YahooLeagueScout sport={currentSport} />
 
           {/* Trade signals — hot/cold movers from live news */}
           <Animated.View style={[tradeSignalStyles.section, heroStyle]}>
@@ -840,6 +1080,7 @@ TikTok creator voice: confident, brief, opinionated. No fluff. No disclaimers.`;
           onSelect={p => modalSide && addPlayer(modalSide, p)}
           excluded={excluded}
           sport={currentSport}
+          side={modalSide}
         />
       </SafeAreaView>
     </View>
@@ -857,7 +1098,7 @@ function PerPlayerRead({ player, side, text }: { player: TradePlayer; side: 'GIV
           <Text variant="labelSmall" style={{ color: sideColor, fontSize: 10, letterSpacing: 0.5 }}>{side}</Text>
         </View>
         <Text variant="bodyMedium" color={colors.textPrimary} style={{ flex: 1 }} numberOfLines={1}>
-          {player.name} <Text variant="caption" color={colors.textTertiary}>· {player.position} · {player.team}</Text>
+          {player.name} <Text variant="caption" color={colors.textTertiary}>· {player.pos} · {player.team}</Text>
         </Text>
       </View>
       {text ? (
@@ -1139,6 +1380,25 @@ const modal = StyleSheet.create({
     alignSelf:       'center',
     marginTop:       spacing.md,
     marginBottom:    spacing.sm,
+  },
+  sourceRow: {
+    flexDirection:     'row',
+    gap:               spacing.sm,
+    paddingHorizontal: spacing.base,
+    marginBottom:      spacing.sm,
+  },
+  sourceTab: {
+    flex:            1,
+    alignItems:      'center',
+    paddingVertical: spacing.sm,
+    borderRadius:    radius.md,
+    backgroundColor: colors.background,
+    borderWidth:     1,
+    borderColor:     colors.border,
+  },
+  sourceTabActive: {
+    backgroundColor: `${colors.green}18`,
+    borderColor:     `${colors.green}55`,
   },
   header: {
     flexDirection:    'row',

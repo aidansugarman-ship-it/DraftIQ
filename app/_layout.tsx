@@ -9,6 +9,9 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useFavoritesStore } from '@store/useFavoritesStore';
 import { useStreakStore } from '@store/useStreakStore';
+import { useYahooStore } from '@store/useYahooStore';
+import { isYahooConnected } from '@services/yahooAuth';
+import { GlossaryModalHost } from '@components/shared/GlossaryTerm';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, COLLECTIONS } from '@lib/firebase';
 import { queryClient } from '@lib/queryClient';
@@ -63,7 +66,16 @@ export default function RootLayout() {
             };
           }
           setUser(profile);
-          router.replace(profile.onboardingComplete ? '/(tabs)' : '/(onboarding)/sport');
+          if (!profile.onboardingComplete) {
+            router.replace('/(onboarding)/sport');
+          } else {
+            // Yahoo gate — applies to everyone, even pre-existing accounts.
+            // Bypassable: once they connect OR tap "I don't use Yahoo", it stops.
+            await useYahooStore.getState().hydrate();
+            const connected = await isYahooConnected();
+            const dismissed = useYahooStore.getState().promptDismissed;
+            router.replace(connected || dismissed ? '/(tabs)' : '/connect-gate');
+          }
         } catch (e) {
           console.error('[auth] failed to load profile after sign-in:', e);
           clearUser();
@@ -87,6 +99,10 @@ export default function RootLayout() {
   useEffect(() => {
     useFavoritesStore.getState().hydrate();
     useStreakStore.getState().hydrate();
+    // Hydrate Yahoo picks, then auto-pick a league per sport if signed in.
+    useYahooStore.getState().hydrate().then(() => {
+      useYahooStore.getState().autoConnect();
+    });
   }, []);
 
   if (!fontsLoaded && !fontError) return null;
@@ -95,6 +111,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+      <GlossaryModalHost />
     </QueryClientProvider>
   );
 }

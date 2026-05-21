@@ -18,6 +18,7 @@ import Animated, {
 import { Text } from '@components/ui/Text';
 import { OnboardingProgress } from '@components/shared/OnboardingProgress';
 import { OnboardingFooter } from '@components/shared/OnboardingFooter';
+import { TooNewButton } from '@components/shared/TooNewButton';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
@@ -116,7 +117,7 @@ export default function LeagueSettingsScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={4} totalSteps={5} />
+        <OnboardingProgress step={5} totalSteps={6} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -127,6 +128,9 @@ export default function LeagueSettingsScreen() {
             <Text variant="bodyLarge" color={colors.textSecondary} style={styles.subtitle}>
               We'll personalize your draft board around these settings.
             </Text>
+            <View style={{ marginTop: spacing.md }}>
+              <TooNewButton topic="fantasy league scoring types and settings — what scoring type means, how team count changes strategy, and which to pick if unsure" />
+            </View>
           </Animated.View>
 
           {/* ── Scoring Type ───────────────────────────────────────────── */}

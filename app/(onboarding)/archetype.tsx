@@ -45,7 +45,7 @@ export default function ArchetypeScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <OnboardingProgress step={3} totalSteps={5} />
+        <OnboardingProgress step={4} totalSteps={6} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
