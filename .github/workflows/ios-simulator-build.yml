@@ -52,10 +52,11 @@ jobs:
           EXPO_PUBLIC_YAHOO_CLIENT_ID:                ${{ secrets.EXPO_PUBLIC_YAHOO_CLIENT_ID }}
         run: |
           cd ios
+          # Release config bundles the JS into the .app — no Metro needed at runtime.
           xcodebuild build \
             -workspace DraftIQ.xcworkspace \
             -scheme DraftIQ \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
@@ -64,7 +65,7 @@ jobs:
 
       - name: Find and package built .app
         run: |
-          APP_PATH=$(find ios/build/Build/Products/Debug-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
+          APP_PATH=$(find ios/build/Build/Products/Release-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
           if [ -z "$APP_PATH" ]; then
             echo "No .app found"; exit 1
           fi
