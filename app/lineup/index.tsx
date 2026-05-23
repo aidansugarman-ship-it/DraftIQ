@@ -24,10 +24,11 @@ import { SportTint } from '@components/shared/SportTint';
 import { LineupAlertsCard } from '@components/shared/LineupAlertsCard';
 
 interface LineupCall {
-  name:    string;
-  slot:    'START' | 'BENCH';
-  changed: boolean;
-  reason:  string;
+  name:       string;
+  slot:       'START' | 'BENCH';
+  changed:    boolean;
+  reason:     string;
+  confidence: number;  // 1-5, AI's certainty in this call
 }
 
 interface Optimized {
@@ -61,12 +62,18 @@ ${rosterStr}
 Output EXACT JSON, nothing else:
 {
   "calls": [
-    {"name": "exact player name", "slot": "START" | "BENCH", "changed": true | false, "reason": "one punchy sentence — why, especially if this is a change from their current slot"}
+    {
+      "name": "exact player name",
+      "slot": "START" | "BENCH",
+      "changed": true | false,
+      "reason": "one punchy sentence — why, especially if this is a change from their current slot",
+      "confidence": 1-5 integer (5 = total lock, 3 = solid, 1 = total coin flip)
+    }
   ],
   "summary": "2 sentences — the headline of what to change and why. TikTok creator voice: confident, sharp, no fluff."
 }
 
-Include EVERY player from the roster in "calls". "changed" is true if your call differs from their current slot.`;
+Include EVERY player from the roster in "calls". "changed" is true if your call differs from their current slot. Be honest about confidence — boom-or-bust guys get lower numbers.`;
 
       const raw = await gemini.chat(prompt, sportDef.shortLabel);
       const match = raw.match(/\{[\s\S]*\}/);
@@ -205,6 +212,7 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
 }
 
 function LineupRow({ call, last }: { call: LineupCall; last: boolean }) {
+  const conf = Math.max(0, Math.min(5, call.confidence ?? 0));
   return (
     <View style={[rowStyles.row, !last && rowStyles.border]}>
       <View style={{ flex: 1 }}>
@@ -217,9 +225,29 @@ function LineupRow({ call, last }: { call: LineupCall; last: boolean }) {
           </Text>
         )}
       </View>
+      <ConfidenceDial value={conf} />
       {call.changed && (
         <View style={rowStyles.changedDot} />
       )}
+    </View>
+  );
+}
+
+function ConfidenceDial({ value }: { value: number }) {
+  // 5 dots, filled left-to-right based on confidence.
+  // Color shifts: 1-2 grey (coin flip), 3 gold (solid), 4-5 green (lock).
+  const color = value >= 4 ? colors.green : value === 3 ? colors.gold : colors.textTertiary;
+  return (
+    <View style={dialStyles.row}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <View
+          key={i}
+          style={[
+            dialStyles.dot,
+            { backgroundColor: i <= value ? color : 'rgba(255,255,255,0.08)' },
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -312,5 +340,18 @@ const rowStyles = StyleSheet.create({
   changedDot: {
     width: 7, height: 7, borderRadius: 4,
     backgroundColor: colors.gold,
+  },
+});
+
+const dialStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap:           3,
+    alignItems:    'center',
+  },
+  dot: {
+    width:        5,
+    height:       5,
+    borderRadius: 3,
   },
 });

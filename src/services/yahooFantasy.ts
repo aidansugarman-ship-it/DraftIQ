@@ -176,6 +176,35 @@ export const yahooFantasy = {
     return teams;
   },
 
+  /**
+   * The current-week matchup for one of the user's teams.
+   * Returns the opponent's teamKey + name so we can pull their roster.
+   */
+  async currentMatchup(teamKey: string): Promise<{ opponentTeamKey: string; opponentName: string; week: number } | null> {
+    try {
+      const data = await get(`/team/${teamKey}/matchups;weeks=current`);
+      const matchups = data.fantasy_content?.team?.[1]?.matchups ?? {};
+      const m = matchups['0']?.matchup;
+      if (!m) return null;
+      const week = Number(m.week ?? 0);
+      const teams = m['0']?.teams ?? {};
+      const opp = Object.values(teams).find((t: any) => {
+        const meta = t?.team?.[0];
+        if (!Array.isArray(meta)) return false;
+        const tk = meta.find((e: any) => e?.team_key)?.team_key;
+        return tk && tk !== teamKey;
+      }) as any;
+      if (!opp) return null;
+      const meta = opp.team[0] as any[];
+      const opponentTeamKey = meta.find((e: any) => e?.team_key)?.team_key ?? '';
+      const opponentName    = meta.find((e: any) => e?.name)?.name ?? 'Opponent';
+      return { opponentTeamKey, opponentName, week };
+    } catch (e) {
+      console.error('[yahooFantasy.currentMatchup] parse error', e);
+      return null;
+    }
+  },
+
   /** Available players (free agents + waivers) in a league — the real waiver wire. */
   async freeAgents(leagueKey: string, count = 25): Promise<YahooRosterPlayer[]> {
     const data = await get(`/league/${leagueKey}/players;status=A;count=${count}`);

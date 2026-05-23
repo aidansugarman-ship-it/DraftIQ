@@ -1,4 +1,5 @@
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { radius } from '@constants/spacing';
@@ -25,10 +26,15 @@ const VARIANTS: Record<StickerVariant, { color: string; emoji: string; label: st
 export function Sticker({ variant, label }: { variant: StickerVariant; label?: string }) {
   const def = VARIANTS[variant];
   return (
-    <View style={[styles.wrap, { backgroundColor: `${def.color}1A`, borderColor: `${def.color}55` }]}>
-      <Text style={styles.emoji}>{def.emoji}</Text>
+    <Animated.View
+      entering={ZoomIn.springify().damping(11).mass(0.6).stiffness(180)}
+      style={[styles.wrap, { backgroundColor: `${def.color}1A`, borderColor: `${def.color}55` }]}
+    >
+      <Animated.Text entering={FadeIn.delay(100).duration(200)} style={styles.emoji}>
+        {def.emoji}
+      </Animated.Text>
       <Text style={[styles.label, { color: def.color }]}>{label ?? def.label}</Text>
-    </View>
+    </Animated.View>
   );
 }
 

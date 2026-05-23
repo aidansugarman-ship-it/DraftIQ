@@ -28,6 +28,9 @@ import { TeamLogo } from '@components/shared/TeamLogo';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { PulseSection } from '@components/shared/PulseSection';
 import { PlayerAvatar } from '@components/shared/PlayerAvatar';
+import { NewsTicker } from '@components/shared/NewsTicker';
+import { WeeklyMatchupSection } from '@components/shared/WeeklyMatchupSection';
+import { ScheduleStrength } from '@components/shared/ScheduleStrength';
 
 /**
  * One screen, used by all four sport tabs (nfl/nba/mlb/nhl).
@@ -155,6 +158,9 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             </Text>
           </Animated.View>
 
+          {/* Stock ticker — scrolling marquee of live headlines */}
+          <NewsTicker sport={sport} />
+
           {/* PULSE — daily hot/cold + take, sport-scoped */}
           <PulseSection sport={sport} />
 
@@ -221,6 +227,9 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             </>
           ) : null}
 
+          {/* THIS WEEK — real Yahoo matchup + AI position-by-position breakdown */}
+          <WeeklyMatchupSection sport={sport} />
+
           {/* Lineup Optimizer — one-tap AI lineup */}
           <TouchableOpacity
             style={[styles.pwrCta, { borderColor: `${def.primaryColor}40` }]}
@@ -246,6 +255,7 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             contentContainerStyle={styles.pillScroll}
             style={{ marginBottom: spacing.lg }}
           >
+            <ChipPill icon="play-circle"    label="Spotlight"   accent={colors.green}  onPress={() => router.push('/spotlight' as any)} />
             <ChipPill icon="flash"          label="Mock Draft"  accent={colors.gold}   onPress={() => router.push('/draft')} />
             <ChipPill icon="swap-vertical"  label="Add / Drop"  accent={colors.coral}  onPress={() => router.push('/add-drop')} />
             <ChipPill icon="medkit"
@@ -291,6 +301,9 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
           </TouchableOpacity>
+
+          {/* Schedule strength — next 3 matchups per starter, color-coded */}
+          <ScheduleStrength sport={sport} />
 
           {/* Power Rankings — works for all 4 sports via Yahoo */}
           <TouchableOpacity

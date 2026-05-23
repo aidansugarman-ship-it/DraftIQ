@@ -58,3 +58,34 @@ export async function disableLineupReminders(): Promise<void> {
     /* no-op */
   }
 }
+
+/**
+ * Fire-and-forget local notification, used for breaking-news pings on
+ * watchlisted players. Silently no-ops if permission isn't granted yet.
+ */
+export async function pingNow(title: string, body: string): Promise<void> {
+  if (!Notifications) return;
+  try {
+    const perm = await Notifications.getPermissionsAsync();
+    if (perm.status !== 'granted') return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body },
+      trigger: null, // fire immediately
+    });
+  } catch {
+    /* no-op */
+  }
+}
+
+/** Request permission upfront — used when the user opts into watchlist alerts. */
+export async function requestNotificationPermission(): Promise<boolean> {
+  if (!Notifications) return false;
+  try {
+    const perm = await Notifications.getPermissionsAsync();
+    if (perm.status === 'granted') return true;
+    const req = await Notifications.requestPermissionsAsync();
+    return req.status === 'granted';
+  } catch {
+    return false;
+  }
+}

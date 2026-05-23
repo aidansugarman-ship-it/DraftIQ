@@ -10,6 +10,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useFavoritesStore } from '@store/useFavoritesStore';
 import { useStreakStore } from '@store/useStreakStore';
 import { useGmHistoryStore } from '@store/useGmHistoryStore';
+import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
 import { GlossaryModalHost } from '@components/shared/GlossaryTerm';
@@ -98,7 +99,11 @@ export default function RootLayout() {
 
   // Hydrate persisted state on app start
   useEffect(() => {
-    useFavoritesStore.getState().hydrate();
+    useFavoritesStore.getState().hydrate().then(() => {
+      // After favorites are loaded, sniff for breaking news on watchlisted players.
+      // Fully background — silent if there's nothing new or permission isn't granted.
+      scanWatchlistForNews();
+    });
     useStreakStore.getState().hydrate();
     useGmHistoryStore.getState().hydrate();
     // Hydrate Yahoo picks, then auto-pick a league per sport if signed in.
