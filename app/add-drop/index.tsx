@@ -21,6 +21,7 @@ import { SportTint } from '@components/shared/SportTint';
 import { EmptyState } from '@components/shared/EmptyState';
 import { TeamLogo } from '@components/shared/TeamLogo';
 import { PlayerAvatar } from '@components/shared/PlayerAvatar';
+import { Sticker } from '@components/shared/Sticker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -620,20 +621,43 @@ const newsCardStyles = StyleSheet.create({
 
 // ─── Yahoo waiver wire — the user's REAL league free agents ───────────────────
 
-function YahooWaiverRow({ player, index, sportLabel }: { player: YahooRosterPlayer; index: number; sportLabel: string }) {
-  const [aiTake, setAiTake]       = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [showAI, setShowAI]       = useState(false);
+interface ScoutReport {
+  bio:     string;
+  stats:   string;
+  verdict: string;
+}
+
+function YahooWaiverRow({ player, index, sportLabel, sport }: { player: YahooRosterPlayer; index: number; sportLabel: string; sport: SportId }) {
+  const [report, setReport]   = useState<ScoutReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen]       = useState(false);
 
   const handleAsk = useCallback(() => {
-    if (aiTake) { setShowAI(v => !v); return; }
-    setShowAI(true);
-    setAiLoading(true);
-    gemini.addDropAdvice(player.name, 'your weakest bench player', sportLabel)
-      .then(setAiTake)
-      .catch(() => setAiTake('AI take unavailable right now.'))
-      .finally(() => setAiLoading(false));
-  }, [aiTake, player, sportLabel]);
+    if (report) { setOpen(v => !v); return; }
+    setOpen(true);
+    setLoading(true);
+    const prompt = `Quick scout report on ${player.name} (${player.position}, ${player.team}) for ${sportLabel} fantasy.
+
+Output EXACT JSON, nothing else:
+{
+  "bio":     "1-2 sentences — who they are, their team, current role",
+  "stats":   "their key season/recent stats — like '24 HR / .298 AVG / .945 OPS' for MLB, '28 PPG / 8 RPG' for NBA",
+  "verdict": "ADD or HOLD plus 1-2 sentence why — TikTok creator voice, confident"
+}`;
+    gemini.chat(prompt, sportLabel)
+      .then((raw) => {
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('no json');
+        const parsed = JSON.parse(m[0]);
+        setReport({
+          bio:     parsed.bio ?? '',
+          stats:   parsed.stats ?? '',
+          verdict: parsed.verdict ?? '',
+        });
+      })
+      .catch(() => setReport({ bio: '', stats: '', verdict: 'Scout report unavailable right now — tap again in a sec.' }))
+      .finally(() => setLoading(false));
+  }, [report, player, sportLabel]);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(10);
@@ -643,32 +667,60 @@ function YahooWaiverRow({ player, index, sportLabel }: { player: YahooRosterPlay
   }, []);
   const anim = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
 
+  const isAdd = report?.verdict.toUpperCase().includes('ADD');
+
   return (
     <Animated.View style={anim}>
       <View style={yahooWaiverStyles.wrap}>
         <TouchableOpacity onPress={handleAsk} activeOpacity={0.85} style={yahooWaiverStyles.top}>
-          <View style={yahooWaiverStyles.rank}>
-            <Text variant="labelSmall" color={colors.textTertiary}>#{index + 1}</Text>
-          </View>
+          <Text variant="labelSmall" color={colors.textTertiary} style={{ width: 22 }}>#{index + 1}</Text>
+          <PlayerAvatar sport={sport} id={player.playerKey} name={player.name} size={36} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="bodyMedium" color={colors.textPrimary} numberOfLines={1}>{player.name}</Text>
-            <Text variant="caption" color={colors.textTertiary}>
-              {player.position} · {player.team || 'FA'}{player.status ? ` · ${player.status}` : ''}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <TeamLogo sport={sport} team={player.team || 'FA'} size={12} />
+              <Text variant="caption" color={colors.textTertiary}>
+                {player.position} · {player.team || 'FA'}{player.status ? ` · ${player.status}` : ''}
+              </Text>
+            </View>
           </View>
-          <View style={yahooWaiverStyles.faPill}>
-            <Text variant="labelSmall" style={{ color: colors.green, fontSize: 10 }}>AVAILABLE</Text>
-          </View>
-          <Ionicons name={showAI ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textTertiary} />
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textTertiary} />
         </TouchableOpacity>
-        {showAI && (
+
+        {open && (
           <View style={yahooWaiverStyles.aiBox}>
-            <Text variant="labelSmall" color={colors.green} style={{ letterSpacing: 0.8, marginBottom: 4 }}>
-              SHOULD YOU ADD?
-            </Text>
-            {aiLoading
-              ? <ActivityIndicator size="small" color={colors.green} />
-              : <Text variant="bodySmall" color={colors.textSecondary}>{aiTake}</Text>}
+            {loading ? (
+              <ActivityIndicator size="small" color={colors.green} />
+            ) : report ? (
+              <View style={{ gap: spacing.sm }}>
+                {!!report.bio && (
+                  <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 19 }}>
+                    {report.bio}
+                  </Text>
+                )}
+                {!!report.stats && (
+                  <View style={yahooWaiverStyles.statsBox}>
+                    <Text variant="labelSmall" color={colors.textTertiary} style={{ letterSpacing: 0.6, marginBottom: 4 }}>
+                      KEY STATS
+                    </Text>
+                    <Text variant="bodyMedium" color={colors.textPrimary} style={{ fontWeight: '700' }}>
+                      {report.stats}
+                    </Text>
+                  </View>
+                )}
+                {!!report.verdict && (
+                  <View style={[yahooWaiverStyles.verdictBox, {
+                    backgroundColor: `${isAdd ? colors.green : colors.gold}10`,
+                    borderLeftColor: isAdd ? colors.green : colors.gold,
+                  }]}>
+                    <Sticker variant={isAdd ? 'must' : 'lockedIn'} label={isAdd ? 'ADD' : 'HOLD'} />
+                    <Text variant="bodyMedium" color={colors.textPrimary} style={{ fontWeight: '700', lineHeight: 22, marginTop: 6 }}>
+                      {report.verdict}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
         )}
       </View>
@@ -714,7 +766,7 @@ function YahooWaiverSection({ sport }: { sport: SportId }) {
         </Text>
       ) : (
         players.map((p, i) => (
-          <YahooWaiverRow key={p.playerKey} player={p} index={i} sportLabel={SPORTS[sport].shortLabel} />
+          <YahooWaiverRow key={p.playerKey} player={p} index={i} sport={sport} sportLabel={SPORTS[sport].shortLabel} />
         ))
       )}
     </View>
@@ -734,8 +786,20 @@ const yahooWaiverStyles = StyleSheet.create({
     backgroundColor: `${colors.green}14`, borderWidth: 1, borderColor: `${colors.green}40`,
   },
   aiBox: {
-    paddingHorizontal: spacing.base, paddingBottom: spacing.base, paddingTop: spacing.xs,
+    paddingHorizontal: spacing.base, paddingBottom: spacing.base, paddingTop: spacing.sm,
     borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: `${colors.green}06`,
+  },
+  statsBox: {
+    backgroundColor: colors.background,
+    borderRadius:    radius.md,
+    padding:         spacing.sm,
+    borderWidth:     1,
+    borderColor:     colors.border,
+  },
+  verdictBox: {
+    borderRadius:    radius.md,
+    borderLeftWidth: 3,
+    padding:         spacing.sm,
   },
 });
 

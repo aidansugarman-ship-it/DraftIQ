@@ -26,6 +26,8 @@ import { useMyRoster } from '@hooks/useMyRoster';
 import { espn, type EspnNewsItem, type EspnGame } from '@services/espn';
 import { TeamLogo } from '@components/shared/TeamLogo';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
+import { PulseSection } from '@components/shared/PulseSection';
+import { PlayerAvatar } from '@components/shared/PlayerAvatar';
 
 /**
  * One screen, used by all four sport tabs (nfl/nba/mlb/nhl).
@@ -153,6 +155,9 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             </Text>
           </Animated.View>
 
+          {/* PULSE — daily hot/cold + take, sport-scoped */}
+          <PulseSection sport={sport} />
+
           {/* MY TEAM — Yahoo/Sleeper powered, or smart no-league message */}
           {!hasLeague ? (
             <View style={{ marginBottom: spacing.lg }}>
@@ -187,7 +192,8 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
                     activeOpacity={0.7}
                     onPress={() => router.push(`/player?id=${encodeURIComponent(p.id)}&name=${encodeURIComponent(p.name)}&team=${encodeURIComponent(p.team)}&pos=${encodeURIComponent(p.position)}`)}
                   >
-                    <TeamLogo sport={sport} team={p.team} size={22} />
+                    <PlayerAvatar sport={sport} id={p.id} name={p.name} size={28} />
+                    <TeamLogo sport={sport} team={p.team} size={18} />
                     <View style={[styles.posTag, { backgroundColor: `${def.primaryColor}1A` }]}>
                       <Text variant="labelSmall" style={{ color: def.primaryColor, fontSize: 10 }}>
                         {p.position}

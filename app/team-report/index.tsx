@@ -14,6 +14,7 @@ import { spacing, radius } from '@constants/spacing';
 import { SPORTS } from '@constants/sports';
 import { useUserStore } from '@store/useUserStore';
 import { useMyRoster } from '@hooks/useMyRoster';
+import { useGmHistoryStore } from '@store/useGmHistoryStore';
 import { gemini } from '@services/gemini';
 import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
@@ -85,7 +86,16 @@ Be honest and specific. Real evaluations, not flattery.`;
         holes:     Array.isArray(parsed.holes) ? parsed.holes : [],
         strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
       };
-      if (roster) cache[roster.leagueId] = { ts: Date.now(), report: rep };
+      if (roster) {
+        cache[roster.leagueId] = { ts: Date.now(), report: rep };
+        // Log a daily snapshot so the user can see their GM Score over time.
+        useGmHistoryStore.getState().record({
+          sport,
+          leagueId: roster.leagueId,
+          score:    rep.gmScore,
+          grade:    rep.grade,
+        });
+      }
       setReport(rep);
     } catch {
       setError('Could not grade your team right now. Try again in a sec.');
@@ -149,6 +159,9 @@ Be honest and specific. Real evaluations, not flattery.`;
                   {report.headline}
                 </Text>
               </View>
+
+              {/* GM Score history — the trend over time */}
+              <GmHistoryStrip leagueId={roster?.leagueId ?? ''} />
 
               {/* Position grades */}
               {report.positions.length > 0 && (
@@ -215,6 +228,77 @@ Be honest and specific. Real evaluations, not flattery.`;
     </View>
   );
 }
+
+// ─── GM Score history strip ───────────────────────────────────────────────────
+
+function GmHistoryStrip({ leagueId }: { leagueId: string }) {
+  const snapshots = useGmHistoryStore(s => s.snapshots);
+  const list = snapshots
+    .filter(snap => snap.leagueId === leagueId)
+    .sort((a, b) => a.ts - b.ts)
+    .slice(-14);
+
+  if (list.length < 2) return null;
+
+  const max = Math.max(...list.map(s => s.score), 100);
+  const min = Math.min(...list.map(s => s.score), 0);
+  const range = Math.max(max - min, 20);
+
+  return (
+    <View style={historyStyles.wrap}>
+      <Text variant="labelSmall" color={colors.textTertiary} style={{ letterSpacing: 1, marginBottom: spacing.sm }}>
+        GM SCORE HISTORY · LAST {list.length}
+      </Text>
+      <View style={historyStyles.chart}>
+        {list.map((s, i) => {
+          const height = ((s.score - min) / range) * 60 + 8;
+          const color = scoreColor(s.score);
+          const date  = new Date(s.ts);
+          return (
+            <View key={`${s.ts}-${i}`} style={historyStyles.col}>
+              <Text variant="caption" style={{ color, fontSize: 9, fontWeight: '700' }}>
+                {s.score}
+              </Text>
+              <View style={[historyStyles.bar, { height, backgroundColor: `${color}80`, borderColor: color }]} />
+              <Text variant="caption" color={colors.textTertiary} style={{ fontSize: 9 }}>
+                {date.getMonth() + 1}/{date.getDate()}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const historyStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    padding:         spacing.base,
+    marginBottom:    spacing.lg,
+  },
+  chart: {
+    flexDirection: 'row',
+    alignItems:    'flex-end',
+    gap:           4,
+    height:        90,
+  },
+  col: {
+    flex:        1,
+    alignItems:  'center',
+    gap:         3,
+    justifyContent: 'flex-end',
+  },
+  bar: {
+    width:        '70%',
+    minWidth:     8,
+    borderRadius: 3,
+    borderWidth:  1,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },

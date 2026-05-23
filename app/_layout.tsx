@@ -9,6 +9,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useFavoritesStore } from '@store/useFavoritesStore';
 import { useStreakStore } from '@store/useStreakStore';
+import { useGmHistoryStore } from '@store/useGmHistoryStore';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
 import { GlossaryModalHost } from '@components/shared/GlossaryTerm';
@@ -99,6 +100,7 @@ export default function RootLayout() {
   useEffect(() => {
     useFavoritesStore.getState().hydrate();
     useStreakStore.getState().hydrate();
+    useGmHistoryStore.getState().hydrate();
     // Hydrate Yahoo picks, then auto-pick a league per sport if signed in.
     useYahooStore.getState().hydrate().then(() => {
       useYahooStore.getState().autoConnect();
