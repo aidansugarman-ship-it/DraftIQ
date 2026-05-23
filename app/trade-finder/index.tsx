@@ -18,6 +18,7 @@ import { yahooFantasy } from '@services/yahooFantasy';
 import { gemini } from '@services/gemini';
 import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
+import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
 
@@ -118,13 +119,7 @@ TikTok creator voice. No fluff. Real player names only.`;
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!active ? (
-            <EmptyState
-              emoji="🤝"
-              title="No league connected"
-              body="Connect your Yahoo league so the AI can scan it for trades that help you."
-              ctaLabel="Connect Yahoo"
-              onCta={() => router.push('/settings/connect-yahoo')}
-            />
+            <NoLeagueState sport={sport} feature="scan your league for trades" />
           ) : loading && ideas.length === 0 ? (
             <>
               <Text style={styles.title}>SCANNING YOUR{'\n'}LEAGUE…</Text>

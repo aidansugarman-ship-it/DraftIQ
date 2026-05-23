@@ -165,7 +165,7 @@ function buildReportsFromEspn(injuries: EspnInjury[]): InjuryReport[] {
       };
     })
     .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
-    .slice(0, 40);
+    .slice(0, 250); // was 40 — count badge showed real total but list was truncated
 }
 
 function buildReports(players: Record<string, SleeperPlayer>): InjuryReport[] {
@@ -197,7 +197,7 @@ function buildReports(players: Record<string, SleeperPlayer>): InjuryReport[] {
       if (statusDiff !== 0) return statusDiff;
       return impactOrder[a.impact] - impactOrder[b.impact];
     })
-    .slice(0, 40);
+    .slice(0, 250); // was 40 — count badge showed real total but list was truncated
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────

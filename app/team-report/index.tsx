@@ -17,6 +17,7 @@ import { useMyRoster } from '@hooks/useMyRoster';
 import { gemini } from '@services/gemini';
 import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
+import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
 
@@ -111,13 +112,7 @@ Be honest and specific. Real evaluations, not flattery.`;
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!hasLeague ? (
-            <EmptyState
-              emoji="📋"
-              title="No league connected"
-              body="Connect your Yahoo league to get your team graded."
-              ctaLabel="Connect Yahoo"
-              onCta={() => router.push('/settings/connect-yahoo')}
-            />
+            <NoLeagueState sport={sport} feature="grade your team" />
           ) : rosterLoading || (loading && !report) ? (
             <>
               <Text style={styles.title}>GRADING YOUR{'\n'}TEAM…</Text>

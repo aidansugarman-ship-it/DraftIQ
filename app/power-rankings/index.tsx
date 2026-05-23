@@ -9,33 +9,32 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { usePowerRankings, type RankedTeam } from '@hooks/usePowerRankings';
 import { SportTint } from '@components/shared/SportTint';
+import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { EmptyState } from '@components/shared/EmptyState';
 import { SkeletonRow } from '@components/shared/Skeleton';
+import { useUserStore } from '@store/useUserStore';
+import { SPORTS } from '@constants/sports';
 
 export default function PowerRankings() {
-  const { rankings, loading, error, hasLeague } = usePowerRankings();
+  const sport = useUserStore((s) => s.currentSport);
+  const sportDef = SPORTS[sport];
+  const { rankings, loading, error, hasLeague } = usePowerRankings(sport);
 
   return (
     <View style={styles.container}>
-      <SportTint sport="nfl" />
+      <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text variant="bodyMedium" color={colors.textPrimary}>Power Rankings</Text>
+          <Text variant="bodyMedium" color={colors.textPrimary}>{sportDef.shortLabel} Power Rankings</Text>
           <View style={{ width: 36 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll}>
           {!hasLeague ? (
-            <EmptyState
-              emoji="🏆"
-              title="Power rankings need your league"
-              body="Connect your Sleeper league so we can rank every team and tell you who to fear."
-              ctaLabel="Connect Sleeper"
-              onCta={() => router.push('/settings/connect-sleeper')}
-            />
+            <NoLeagueState sport={sport} feature="rank every team in your league" />
           ) : loading ? (
             <>
               <Text style={styles.title}>POWER{'\n'}RANKINGS.</Text>

@@ -979,19 +979,8 @@ export default function AddDropScreen() {
                 </>
               )}
 
-              {playerWatch.length > 0 ? (
-                <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm }}>
-                    <Text style={{ fontSize: 16 }}>🏥</Text>
-                    <Text variant="label" color={colors.textTertiary} style={{ letterSpacing: 1 }}>
-                      INJURY MOVEMENT
-                    </Text>
-                  </View>
-                  {playerWatch.map((item, i) => (
-                    <PlayerWatchCard key={`${item.athlete.id}-${item.id}`} item={item} index={i} sport={sport} />
-                  ))}
-                </>
-              ) : trendingStars.length === 0 ? (
+              {/* Injury section intentionally removed — lives on the dedicated Injuries screen now. */}
+              {trendingStars.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyEmoji}>🏥</Text>
                   <Text variant="body" color={colors.textSecondary} align="center">

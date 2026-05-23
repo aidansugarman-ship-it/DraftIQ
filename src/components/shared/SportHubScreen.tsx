@@ -24,6 +24,8 @@ import { SPORTS, type SportId } from '@constants/sports';
 import { useUserStore } from '@store/useUserStore';
 import { useMyRoster } from '@hooks/useMyRoster';
 import { espn, type EspnNewsItem, type EspnGame } from '@services/espn';
+import { TeamLogo } from '@components/shared/TeamLogo';
+import { NoLeagueState } from '@components/shared/NoLeagueState';
 
 /**
  * One screen, used by all four sport tabs (nfl/nba/mlb/nhl).
@@ -151,26 +153,11 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             </Text>
           </Animated.View>
 
-          {/* MY TEAM — Yahoo/Sleeper powered, or a connect prompt */}
+          {/* MY TEAM — Yahoo/Sleeper powered, or smart no-league message */}
           {!hasLeague ? (
-            <TouchableOpacity
-              style={[styles.connectCard, { borderColor: `${def.primaryColor}55` }]}
-              onPress={() => router.push('/settings/connect-yahoo')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.connectBubble, { backgroundColor: `${def.primaryColor}22` }]}>
-                <Ionicons name="link" size={20} color={def.primaryColor} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary}>
-                  Connect your {def.shortLabel} league
-                </Text>
-                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                  Link Yahoo to unlock your real roster, power rankings & personalized takes.
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-            </TouchableOpacity>
+            <View style={{ marginBottom: spacing.lg }}>
+              <NoLeagueState sport={sport} feature={`power your ${def.shortLabel} hub`} />
+            </View>
           ) : rosterLoading ? (
             <View style={styles.card}>
               <ActivityIndicator size="small" color={def.primaryColor} />
@@ -200,6 +187,7 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
                     activeOpacity={0.7}
                     onPress={() => router.push(`/player?id=${encodeURIComponent(p.id)}&name=${encodeURIComponent(p.name)}&team=${encodeURIComponent(p.team)}&pos=${encodeURIComponent(p.position)}`)}
                   >
+                    <TeamLogo sport={sport} team={p.team} size={22} />
                     <View style={[styles.posTag, { backgroundColor: `${def.primaryColor}1A` }]}>
                       <Text variant="labelSmall" style={{ color: def.primaryColor, fontSize: 10 }}>
                         {p.position}
@@ -228,100 +216,95 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
           ) : null}
 
           {/* Lineup Optimizer — one-tap AI lineup */}
-          {hasLeague && (
-            <TouchableOpacity
-              style={[styles.pwrCta, { borderColor: `${def.primaryColor}40` }]}
-              onPress={() => router.push('/lineup')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.connectBubble, { backgroundColor: `${def.primaryColor}1A` }]}>
-                <Ionicons name="flash" size={18} color={def.primaryColor} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary}>Optimize My Lineup</Text>
-                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                  One tap — AI sets your best starters & explains every call.
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.pwrCta, { borderColor: `${def.primaryColor}40` }]}
+            onPress={() => router.push('/lineup')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.connectBubble, { backgroundColor: `${def.primaryColor}1A` }]}>
+              <Ionicons name="flash" size={18} color={def.primaryColor} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary}>Optimize My Lineup</Text>
+              <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                One tap — AI sets your best starters & explains every call.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
 
-          {/* Modes */}
-          <SectionHeader label="MODES" />
-          <View style={styles.modeRow}>
-            <ModeButton emoji="⚡️" label="Mock Draft" accent={colors.gold}   onPress={() => router.push('/draft')} />
-            <ModeButton emoji="🔄"  label="Add / Drop" accent={colors.coral}  onPress={() => router.push('/add-drop')} />
-            <ModeButton
-              emoji="🏥"
-              label={injuryCount != null ? `Injuries · ${injuryCount}` : 'Injuries'}
-              accent={colors.gold}
+          {/* Quick-access pills — sleek horizontal scroll, no more corny boxes */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillScroll}
+            style={{ marginBottom: spacing.lg }}
+          >
+            <ChipPill icon="flash"          label="Mock Draft"  accent={colors.gold}   onPress={() => router.push('/draft')} />
+            <ChipPill icon="swap-vertical"  label="Add / Drop"  accent={colors.coral}  onPress={() => router.push('/add-drop')} />
+            <ChipPill icon="medkit"
+              label={injuryCount != null ? `Injuries ${injuryCount}` : 'Injuries'}
+              accent={colors.coral}
               onPress={() => router.push('/injuries')}
             />
-            <ModeButton emoji="↔️"  label="Trade"      accent={colors.purple} onPress={() => router.push('/trade')} />
-          </View>
+            <ChipPill icon="git-compare"    label="Trade"       accent={colors.purple} onPress={() => router.push('/trade')} />
+          </ScrollView>
 
           {/* Team Report — GM Score + roster holes */}
-          {hasLeague && (
-            <TouchableOpacity
-              style={[styles.pwrCta, { borderColor: `${colors.blue}40` }]}
-              onPress={() => router.push('/team-report')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.connectBubble, { backgroundColor: `${colors.blue}1A` }]}>
-                <Ionicons name="clipboard" size={18} color={colors.blue} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary}>Team Report Card</Text>
-                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                  Your GM Score, position grades & the holes to fix.
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.pwrCta, { borderColor: `${colors.blue}40` }]}
+            onPress={() => router.push('/team-report')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.connectBubble, { backgroundColor: `${colors.blue}1A` }]}>
+              <Ionicons name="clipboard" size={18} color={colors.blue} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary}>Team Report Card</Text>
+              <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                Your GM Score, position grades & the holes to fix.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
 
           {/* Trade Finder — AI proposes trades that help you */}
-          {hasLeague && (
-            <TouchableOpacity
-              style={[styles.pwrCta, { borderColor: `${colors.purple}40` }]}
-              onPress={() => router.push('/trade-finder')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.connectBubble, { backgroundColor: `${colors.purple}1A` }]}>
-                <Ionicons name="search" size={18} color={colors.purple} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary}>Find Me a Trade</Text>
-                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                  AI scans every roster & proposes deals — with the pitch.
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.pwrCta, { borderColor: `${colors.purple}40` }]}
+            onPress={() => router.push('/trade-finder')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.connectBubble, { backgroundColor: `${colors.purple}1A` }]}>
+              <Ionicons name="search" size={18} color={colors.purple} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary}>Find Me a Trade</Text>
+              <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                AI scans every roster & proposes deals — with the pitch.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
 
-          {/* Power Rankings — only meaningful with a connected league */}
-          {hasLeague && (
-            <TouchableOpacity
-              style={[styles.pwrCta, { borderColor: `${colors.gold}40` }]}
-              onPress={() => router.push('/power-rankings')}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.connectBubble, { backgroundColor: `${colors.gold}1A` }]}>
-                <Ionicons name="trophy" size={18} color={colors.gold} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary}>
-                  {def.shortLabel} Power Rankings
-                </Text>
-                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
-                  Where every team in your league stands — AI ranked.
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
+          {/* Power Rankings — works for all 4 sports via Yahoo */}
+          <TouchableOpacity
+            style={[styles.pwrCta, { borderColor: `${colors.gold}40` }]}
+            onPress={() => router.push('/power-rankings')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.connectBubble, { backgroundColor: `${colors.gold}1A` }]}>
+              <Ionicons name="trophy" size={18} color={colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary}>
+                {def.shortLabel} Power Rankings
+              </Text>
+              <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                Where every team in your league stands — AI ranked.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </TouchableOpacity>
 
           {/* Games */}
           {sectionLabel && displayGames.length > 0 && (
@@ -371,17 +354,19 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function ModeButton({
-  emoji, label, accent, onPress,
-}: { emoji: string; label: string; accent: string; onPress: () => void }) {
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function ChipPill({
+  icon, label, accent, onPress,
+}: { icon: IoniconName; label: string; accent: string; onPress: () => void }) {
   return (
     <TouchableOpacity
-      style={[modeStyles.btn, { borderColor: `${accent}40` }]}
+      style={[pillStyles.chip, { borderColor: `${accent}50`, backgroundColor: `${accent}10` }]}
       onPress={onPress}
       activeOpacity={0.75}
     >
-      <Text style={modeStyles.emoji}>{emoji}</Text>
-      <Text variant="caption" color={colors.textSecondary} align="center" numberOfLines={1}>
+      <Ionicons name={icon} size={14} color={accent} />
+      <Text variant="bodySmallMedium" style={{ color: colors.textPrimary }}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -536,10 +521,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     alignItems: 'center',
   },
-  modeRow: {
-    flexDirection: 'row',
-    gap:           spacing.sm,
-    marginBottom:  spacing.lg,
+  pillScroll: {
+    gap:               spacing.sm,
+    paddingHorizontal: 2,
   },
   pwrCta: {
     flexDirection:   'row',
@@ -566,18 +550,16 @@ const styles = StyleSheet.create({
   newsBullet: { fontSize: 18, lineHeight: 24, marginTop: 1 },
 });
 
-const modeStyles = StyleSheet.create({
-  btn: {
-    flex:              1,
-    backgroundColor:   colors.surface,
-    borderWidth:       1,
-    borderRadius:      radius.lg,
-    paddingVertical:   spacing.md,
-    paddingHorizontal: 4,
+const pillStyles = StyleSheet.create({
+  chip: {
+    flexDirection:     'row',
     alignItems:        'center',
-    gap:               4,
+    gap:               6,
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.sm,
+    borderRadius:      999,
+    borderWidth:       1,
   },
-  emoji: { fontSize: 20, lineHeight: 26 },
 });
 
 const shStyles = StyleSheet.create({

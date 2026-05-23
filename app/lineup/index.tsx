@@ -18,6 +18,7 @@ import { useUserStore } from '@store/useUserStore';
 import { gemini } from '@services/gemini';
 import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
+import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
 import { LineupAlertsCard } from '@components/shared/LineupAlertsCard';
@@ -99,13 +100,7 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!hasLeague ? (
-            <EmptyState
-              emoji="🏟️"
-              title="No league connected"
-              body="Connect your Yahoo league so the AI can optimize your real lineup."
-              ctaLabel="Connect Yahoo"
-              onCta={() => router.push('/settings/connect-yahoo')}
-            />
+            <NoLeagueState sport={sport} feature="set your optimal lineup" />
           ) : rosterLoading || (loading && !result) ? (
             <>
               <Text style={styles.title}>CRUNCHING YOUR{'\n'}LINEUP…</Text>
