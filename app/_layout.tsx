@@ -10,6 +10,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useFavoritesStore } from '@store/useFavoritesStore';
 import { useStreakStore } from '@store/useStreakStore';
 import { useGmHistoryStore } from '@store/useGmHistoryStore';
+import { useTakesLog } from '@store/useTakesLog';
+import { useTradeBlockStore } from '@store/useTradeBlockStore';
 import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
@@ -106,6 +108,8 @@ export default function RootLayout() {
     });
     useStreakStore.getState().hydrate();
     useGmHistoryStore.getState().hydrate();
+    useTakesLog.getState().hydrate();
+    useTradeBlockStore.getState().hydrate();
     // Hydrate Yahoo picks, then auto-pick a league per sport if signed in.
     useYahooStore.getState().hydrate().then(() => {
       useYahooStore.getState().autoConnect();

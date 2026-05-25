@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,7 +64,26 @@ export default function RosterScreen() {
     <View style={styles.container}>
       <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PageHeader title="My Roster" />
+        <PageHeader
+          title="My Roster"
+          right={
+            roster ? (
+              <TouchableOpacity
+                onPress={() => {
+                  const csv = [
+                    'Slot,Position,Name,Team,Status',
+                    ...roster.players.map(p =>
+                      `${p.isStarter ? 'START' : 'BENCH'},${p.position},${p.name.replace(/,/g, ' ')},${p.team},${p.injury?.status ?? ''}`),
+                  ].join('\n');
+                  Share.share({ message: `${roster.teamName} — ${roster.leagueName}\n\n${csv}` }).catch(() => {});
+                }}
+                hitSlop={8}
+              >
+                <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+            ) : null
+          }
+        />
 
         <ScrollView contentContainerStyle={styles.scroll}>
           {!hasLeague ? (

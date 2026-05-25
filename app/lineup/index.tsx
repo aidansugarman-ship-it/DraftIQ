@@ -234,20 +234,19 @@ function LineupRow({ call, last }: { call: LineupCall; last: boolean }) {
 }
 
 function ConfidenceDial({ value }: { value: number }) {
-  // 5 dots, filled left-to-right based on confidence.
-  // Color shifts: 1-2 grey (coin flip), 3 gold (solid), 4-5 green (lock).
-  const color = value >= 4 ? colors.green : value === 3 ? colors.gold : colors.textTertiary;
+  // Color-coded confidence BAR (matches the Schedule Strength viz).
+  // 1-2 = coral (coin flip), 3 = gold (solid), 4-5 = green (lock).
+  const pct   = Math.max(0, Math.min(5, value)) / 5;
+  const color = value >= 4 ? colors.green : value >= 3 ? colors.gold : colors.coral;
+  const label = value >= 5 ? 'LOCK' : value >= 4 ? 'STRONG' : value >= 3 ? 'SOLID' : value >= 2 ? 'RISKY' : 'COIN FLIP';
   return (
-    <View style={dialStyles.row}>
-      {[1, 2, 3, 4, 5].map(i => (
-        <View
-          key={i}
-          style={[
-            dialStyles.dot,
-            { backgroundColor: i <= value ? color : 'rgba(255,255,255,0.08)' },
-          ]}
-        />
-      ))}
+    <View style={dialStyles.col}>
+      <Text variant="caption" style={{ color, fontSize: 9, fontWeight: '800', letterSpacing: 0.6, marginBottom: 2 }}>
+        {label}
+      </Text>
+      <View style={dialStyles.track}>
+        <View style={[dialStyles.fill, { width: `${pct * 100}%`, backgroundColor: color }]} />
+      </View>
     </View>
   );
 }
@@ -344,14 +343,19 @@ const rowStyles = StyleSheet.create({
 });
 
 const dialStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    gap:           3,
-    alignItems:    'center',
+  col: {
+    width:      62,
+    alignItems: 'flex-end',
   },
-  dot: {
-    width:        5,
-    height:       5,
+  track: {
+    width:           60,
+    height:          6,
+    borderRadius:    3,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow:        'hidden',
+  },
+  fill: {
+    height:       '100%',
     borderRadius: 3,
   },
 });

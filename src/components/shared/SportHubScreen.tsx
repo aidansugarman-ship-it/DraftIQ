@@ -5,7 +5,10 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { useRefreshSignal } from '@store/useRefreshSignal';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +34,8 @@ import { PlayerAvatar } from '@components/shared/PlayerAvatar';
 import { NewsTicker } from '@components/shared/NewsTicker';
 import { WeeklyMatchupSection } from '@components/shared/WeeklyMatchupSection';
 import { ScheduleStrength } from '@components/shared/ScheduleStrength';
+import { DailySnapshotCard } from '@components/shared/DailySnapshotCard';
+import { DraftIQScoreCard } from '@components/shared/DraftIQScoreCard';
 
 /**
  * One screen, used by all four sport tabs (nfl/nba/mlb/nhl).
@@ -53,6 +58,16 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
   const [games,       setGames]       = useState<EspnGame[]>([]);
   const [injuryCount, setInjuryCount] = useState<number | null>(null);
   const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const bumpRefresh = useRefreshSignal((s) => s.bump);
+
+  const onPullRefresh = async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    bumpRefresh();
+    // Brief delay so users see the spinner ack their gesture
+    setTimeout(() => setRefreshing(false), 600);
+  };
 
   // ── Game bucketing ──────────────────────────────────────────────────────────
   const now     = Date.now();
@@ -126,7 +141,18 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
       />
 
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onPullRefresh}
+              tintColor={def.primaryColor}
+              colors={[def.primaryColor]}
+            />
+          }
+        >
 
           {/* Top bar — profile + settings (no home screen anymore) */}
           <View style={styles.topBar}>
@@ -160,6 +186,12 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
 
           {/* Stock ticker — scrolling marquee of live headlines */}
           <NewsTicker sport={sport} />
+
+          {/* What's new for THIS user's team since yesterday */}
+          <DailySnapshotCard sport={sport} />
+
+          {/* The flex stat */}
+          <DraftIQScoreCard />
 
           {/* PULSE — daily hot/cold + take, sport-scoped */}
           <PulseSection sport={sport} />
@@ -283,6 +315,48 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
           </TouchableOpacity>
+
+          {/* Trade Block — shop your players league-wide with tailored pitches */}
+          {hasLeague && (
+            <TouchableOpacity
+              style={[styles.pwrCta, { borderColor: `${colors.coral}40` }]}
+              onPress={() => router.push('/trade-block' as any)}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.connectBubble, { backgroundColor: `${colors.coral}1A` }]}>
+                <Ionicons name="megaphone" size={18} color={colors.coral} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyMedium" color={colors.textPrimary}>Put a Player on the Block</Text>
+                <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 2 }}>
+                  AI writes a different pitch for every league-mate.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+
+          {/* GM Wallet + Weekly Wrap — cross-sport links */}
+          <View style={styles.dualCtaRow}>
+            <TouchableOpacity
+              style={[styles.dualCta, { borderColor: `${colors.green}40` }]}
+              onPress={() => router.push('/gm-wallet' as any)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="briefcase" size={18} color={colors.green} />
+              <Text variant="bodySmallMedium" color={colors.textPrimary}>GM Wallet</Text>
+              <Text variant="caption" color={colors.textTertiary} align="center">All teams, one view</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.dualCta, { borderColor: `${colors.purple}40` }]}
+              onPress={() => router.push('/weekly-wrap' as any)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="ribbon" size={18} color={colors.purple} />
+              <Text variant="bodySmallMedium" color={colors.textPrimary}>Weekly Wrap</Text>
+              <Text variant="caption" color={colors.textTertiary} align="center">Your week, shareable</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Trade Finder — AI proposes trades that help you */}
           <TouchableOpacity
@@ -543,6 +617,20 @@ const styles = StyleSheet.create({
   pillScroll: {
     gap:               spacing.sm,
     paddingHorizontal: 2,
+  },
+  dualCtaRow: {
+    flexDirection: 'row',
+    gap:           spacing.sm,
+    marginBottom:  spacing.lg,
+  },
+  dualCta: {
+    flex:            1,
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    padding:         spacing.base,
+    alignItems:      'center',
+    gap:             4,
   },
   pwrCta: {
     flexDirection:   'row',

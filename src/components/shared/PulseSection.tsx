@@ -8,6 +8,8 @@ import { spacing, radius } from '@constants/spacing';
 import { SPORTS, type SportId } from '@constants/sports';
 import { gemini } from '@services/gemini';
 import { espn } from '@services/espn';
+import { useRefreshSignal } from '@store/useRefreshSignal';
+import { useTakesLog } from '@store/useTakesLog';
 
 interface Pulse {
   headline: string;
@@ -54,6 +56,10 @@ Real, current players from the headlines or known stars. No fluff.`;
         cold:     Array.isArray(parsed.cold) ? parsed.cold.slice(0, 3) : [],
       };
       cache[sport] = { ts: Date.now(), pulse: p };
+      // Log to memory so the AI can reference past takes later
+      const log = useTakesLog.getState().log;
+      p.hot.forEach(h => log({ sport, kind: 'hot',  player: h.name, take: h.note }));
+      p.cold.forEach(c => log({ sport, kind: 'cold', player: c.name, take: c.note }));
       setPulse(p);
     } catch {
       /* swallow — keep last state */
@@ -61,6 +67,8 @@ Real, current players from the headlines or known stars. No fluff.`;
       setLoading(false);
     }
   }
+
+  const refreshTick = useRefreshSignal((s) => s.tick);
 
   useEffect(() => {
     const cached = cache[sport];
@@ -70,6 +78,13 @@ Real, current players from the headlines or known stars. No fluff.`;
     }
     refresh();
   }, [sport]);
+
+  // Pull-to-refresh: bust the cache and refetch immediately.
+  useEffect(() => {
+    if (refreshTick === 0) return;
+    delete cache[sport];
+    refresh();
+  }, [refreshTick]);
 
   return (
     <View style={styles.wrap}>
