@@ -31,7 +31,7 @@ export function TeamLogo({ sport, team, size = 28, style }: TeamLogoProps) {
 
   if (!abbrev || errored) {
     return (
-      <View style={[styles.fallback, { width: size, height: size }]}>
+      <View style={[fallbackStyles.box, { width: size, height: size }]}>
         <Text variant="labelSmall" color={colors.textTertiary} style={{ fontSize: Math.max(8, size / 4) }}>
           {team || '—'}
         </Text>
@@ -49,3 +49,14 @@ export function TeamLogo({ sport, team, size = 28, style }: TeamLogoProps) {
     />
   );
 }
+
+const fallbackStyles = StyleSheet.create({
+  box: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.xs,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+});
