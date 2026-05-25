@@ -288,6 +288,9 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             style={{ marginBottom: spacing.lg }}
           >
             <ChipPill icon="play-circle"    label="Spotlight"   accent={colors.green}  onPress={() => router.push('/spotlight' as any)} />
+            <ChipPill icon="flask"          label="What If"     accent={colors.blue}   onPress={() => router.push('/what-if' as any)} />
+            <ChipPill icon="archive"        label="Vault"       accent={colors.purple} onPress={() => router.push('/draft-vault' as any)} />
+            <ChipPill icon="notifications"  label="Alerts"      accent={colors.gold}   onPress={() => router.push('/alerts' as any)} />
             <ChipPill icon="flash"          label="Mock Draft"  accent={colors.gold}   onPress={() => router.push('/draft')} />
             <ChipPill icon="swap-vertical"  label="Add / Drop"  accent={colors.coral}  onPress={() => router.push('/add-drop')} />
             <ChipPill icon="medkit"

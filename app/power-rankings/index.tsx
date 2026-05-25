@@ -7,7 +7,8 @@ import { Text } from '@components/ui/Text';
 import { Button } from '@components/ui/Button';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
-import { usePowerRankings, type RankedTeam } from '@hooks/usePowerRankings';
+import { usePowerRankings, computeMovers, type RankedTeam } from '@hooks/usePowerRankings';
+import { Sticker } from '@components/shared/Sticker';
 import { SportTint } from '@components/shared/SportTint';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { EmptyState } from '@components/shared/EmptyState';
@@ -51,6 +52,10 @@ export default function PowerRankings() {
               <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
                 Where every team stands this week. Built from records, points & roster strength.
               </Text>
+
+              {/* Why-it-changed: biggest movers since the last snapshot */}
+              <MoversBlock rankings={rankings} />
+
               <View style={{ gap: spacing.sm }}>
                 {rankings.map((t, i) => (
                   <Animated.View key={t.ownerId} entering={FadeInDown.delay(i * 60).duration(400)}>
@@ -67,6 +72,91 @@ export default function PowerRankings() {
   );
 }
 
+function MoversBlock({ rankings }: { rankings: RankedTeam[] }) {
+  const { up, down } = computeMovers(rankings);
+  if (up.length === 0 && down.length === 0) return null;
+  return (
+    <View style={moverStyles.wrap}>
+      <View style={moverStyles.header}>
+        <Sticker variant="rising" label="MOVEMENT" />
+        <Text variant="caption" color={colors.textTertiary}>since last snapshot</Text>
+      </View>
+      {up.map((m, i) => (
+        <View key={`u-${i}`} style={[moverStyles.row, { borderLeftColor: colors.green }]}>
+          <View style={[moverStyles.deltaBox, { backgroundColor: `${colors.green}1A`, borderColor: `${colors.green}55` }]}>
+            <Text style={[moverStyles.deltaText, { color: colors.green }]}>↑{Math.abs(m.delta)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text variant="bodySmallMedium" color={colors.textPrimary}>
+              {m.team.teamName} → #{m.team.rank}
+            </Text>
+            {m.team.whyChanged ? (
+              <Text variant="caption" color={colors.textTertiary} numberOfLines={2} style={{ marginTop: 2, lineHeight: 16 }}>
+                {m.team.whyChanged}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ))}
+      {down.map((m, i) => (
+        <View key={`d-${i}`} style={[moverStyles.row, { borderLeftColor: colors.coral }]}>
+          <View style={[moverStyles.deltaBox, { backgroundColor: `${colors.coral}1A`, borderColor: `${colors.coral}55` }]}>
+            <Text style={[moverStyles.deltaText, { color: colors.coral }]}>↓{Math.abs(m.delta)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text variant="bodySmallMedium" color={colors.textPrimary}>
+              {m.team.teamName} → #{m.team.rank}
+            </Text>
+            {m.team.whyChanged ? (
+              <Text variant="caption" color={colors.textTertiary} numberOfLines={2} style={{ marginTop: 2, lineHeight: 16 }}>
+                {m.team.whyChanged}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const moverStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    padding:         spacing.base,
+    marginBottom:    spacing.lg,
+    gap:             spacing.sm,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.sm,
+    marginBottom:  spacing.xs,
+  },
+  row: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingLeft:     spacing.sm,
+    borderLeftWidth: 2,
+  },
+  deltaBox: {
+    minWidth:        38,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius:    radius.sm,
+    borderWidth:     1,
+    alignItems:      'center',
+  },
+  deltaText: {
+    fontSize:   13,
+    fontWeight: '800',
+  },
+});
+
 function TeamCard({ team }: { team: RankedTeam }) {
   const rankColor =
     team.rank === 1 ? colors.gold :
@@ -80,6 +170,14 @@ function TeamCard({ team }: { team: RankedTeam }) {
     <View style={cardStyles.wrap}>
       <View style={[cardStyles.rankBubble, { borderColor: rankColor }]}>
         <Text style={[cardStyles.rankText, { color: rankColor }]}>#{team.rank}</Text>
+        {team.delta != null && team.delta !== 0 && (
+          <Text style={[
+            cardStyles.deltaPill,
+            { color: team.delta < 0 ? colors.green : colors.coral },
+          ]}>
+            {team.delta < 0 ? `↑${Math.abs(team.delta)}` : `↓${team.delta}`}
+          </Text>
+        )}
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -95,6 +193,14 @@ function TeamCard({ team }: { team: RankedTeam }) {
         <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 18 }}>
           {team.reasoning}
         </Text>
+        {team.whyChanged && (
+          <View style={cardStyles.whyBox}>
+            <Ionicons name="flash" size={11} color={colors.gold} />
+            <Text variant="caption" color={colors.textSecondary} style={{ flex: 1, lineHeight: 16, fontStyle: 'italic' }}>
+              {team.whyChanged}
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -153,5 +259,20 @@ const cardStyles = StyleSheet.create({
     fontSize:     14,
     fontWeight:   '800',
     letterSpacing: -0.5,
+  },
+  deltaPill: {
+    fontSize:      9,
+    fontWeight:    '800',
+    marginTop:     2,
+    letterSpacing: 0.4,
+  },
+  whyBox: {
+    flexDirection:   'row',
+    alignItems:      'flex-start',
+    gap:             6,
+    marginTop:       6,
+    paddingTop:      6,
+    borderTopWidth:  1,
+    borderTopColor:  colors.border,
   },
 });

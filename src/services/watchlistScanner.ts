@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFavoritesStore } from '@store/useFavoritesStore';
+import { useAlertsStore } from '@store/useAlertsStore';
 import { espn } from '@services/espn';
 import { pingNow } from '@services/notifications';
 import type { SportId } from '@constants/sports';
@@ -54,12 +55,24 @@ function hashHeadline(headline: string): string {
 
 /** Scan once. Caller is expected to debounce to ~once per app launch. */
 export async function scanWatchlistForNews(): Promise<void> {
-  // Read favorites directly from the store (already hydrated by _layout).
-  const favorites = useFavoritesStore.getState().favorites;
-  if (favorites.length === 0) return;
+  // Read favorites + enabled custom alerts; the union is what we watch.
+  const favorites    = useFavoritesStore.getState().favorites;
+  const alerts       = useAlertsStore.getState().alerts.filter(a => a.enabled);
+
+  // Normalize alerts into the same shape as favorites for the matching loop.
+  const fromAlerts = alerts.map(a => ({
+    id:    `alert-${a.id}`,
+    name:  a.player,
+    team:  '',
+    pos:   '',
+    sport: a.sport,
+    addedAt: new Date(a.ts).toISOString(),
+  }));
+  const watched = [...favorites, ...fromAlerts];
+  if (watched.length === 0) return;
 
   // Group by sport so we hit each ESPN news endpoint once.
-  const bySport = favorites.reduce<Record<SportId, typeof favorites>>((acc, f) => {
+  const bySport = watched.reduce<Record<SportId, typeof watched>>((acc, f) => {
     (acc[f.sport] ??= []).push(f);
     return acc;
   }, {} as any);
