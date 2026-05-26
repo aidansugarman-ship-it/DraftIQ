@@ -57,28 +57,88 @@ EXPERIENCE LEVEL:
 - Beginners: explain WHY in plain language. Define jargon (ADP, target share, xG, BABIP) when you use it.
 - Experienced: skip the basics. Drop the verdict first, brief reasoning second. They know the terms.`;
 
+// ── Concurrency + backoff so the free-tier Gemini quota doesn't choke on burst ──
+// Opening a hub fires ~5 AI calls in parallel (Pulse + Snapshot + Matchup +
+// Schedule + Lineup) and free-tier Gemini caps at ~15 req/min. Hard-cap to 3
+// in-flight + queue the rest; retry 429s with backoff.
+
+const MAX_CONCURRENT = 3;
+let inFlight = 0;
+const queue: Array<() => void> = [];
+
+function acquire(): Promise<void> {
+  return new Promise(resolve => {
+    const tryRun = () => {
+      if (inFlight < MAX_CONCURRENT) {
+        inFlight++;
+        resolve();
+      } else {
+        queue.push(tryRun);
+      }
+    };
+    tryRun();
+  });
+}
+
+function release(): void {
+  inFlight = Math.max(0, inFlight - 1);
+  const next = queue.shift();
+  if (next) next();
+}
+
 async function ask(prompt: string): Promise<string> {
   if (!GEMINI_API_KEY) return 'Add EXPO_PUBLIC_GEMINI_API_KEY to your .env to enable AI analysis.';
 
-  const ctx = userContextLine();
-  const fullPrompt = ctx ? `${ctx}\n\n${prompt}` : prompt;
-
-  const res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  await acquire();
+  try {
+    const ctx = userContextLine();
+    const fullPrompt = ctx ? `${ctx}\n\n${prompt}` : prompt;
+    const body = JSON.stringify({
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ parts: [{ text: fullPrompt }] }],
       generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 350,
+        temperature:     0.8,
+        // Plenty of headroom for the JSON-returning prompts (Pulse, Team Report,
+        // What If, Spotlight reel, etc.). 350 was truncating responses mid-JSON,
+        // which made the JSON.parse step fail and surfaced as "Gemini error".
+        maxOutputTokens: 2048,
       },
-    }),
-  });
+    });
 
-  if (!res.ok) throw new Error(`Gemini error ${res.status}`);
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? 'No analysis available.';
+    // One retry with backoff on 429 (rate limit) or 503 (transient).
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+        const finish = data.candidates?.[0]?.finishReason;
+        if (finish === 'MAX_TOKENS') throw new Error('Response truncated — try a smaller ask.');
+        if (finish === 'SAFETY')     throw new Error('Response blocked by safety filter.');
+        throw new Error('Empty response from Gemini.');
+      }
+
+      if ((res.status === 429 || res.status === 503) && attempt === 0) {
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
+
+      let detail = '';
+      try {
+        const errBody = await res.json();
+        detail = errBody?.error?.message ? ` — ${errBody.error.message}` : '';
+      } catch { /* ignore */ }
+      throw new Error(`Gemini ${res.status}${detail}`);
+    }
+    throw new Error('Gemini retried and still failed.');
+  } finally {
+    release();
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
