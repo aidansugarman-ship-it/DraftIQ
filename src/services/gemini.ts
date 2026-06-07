@@ -1,7 +1,23 @@
 import { useUserStore } from '@store/useUserStore';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+// Google killed the free tier for gemini-2.0-flash (limit: 0). We run a
+// two-tier hybrid on the free tier instead:
+//   - sharp: gemini-2.5-flash — best free model, used for high-value calls
+//     (Pulse, Team Report, Trade Finder, Lineup Optimizer, etc.)
+//   - fast:  gemini-2.5-flash-lite — cheapest, highest free daily quota,
+//     used for background calls (scout reports, glossary explainers,
+//     news takes — anything spammed across the app at volume)
+const MODELS = {
+  sharp: 'gemini-2.5-flash',
+  fast:  'gemini-2.5-flash-lite',
+} as const;
+type Tier = keyof typeof MODELS;
+
+function urlFor(tier: Tier): string {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${MODELS[tier]}:generateContent?key=${GEMINI_API_KEY}`;
+}
 
 // Pulled at call time so it always reflects the user's current setting.
 function userContextLine(): string {
@@ -86,7 +102,7 @@ function release(): void {
   if (next) next();
 }
 
-async function ask(prompt: string): Promise<string> {
+async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
   if (!GEMINI_API_KEY) return 'Add EXPO_PUBLIC_GEMINI_API_KEY to your .env to enable AI analysis.';
 
   await acquire();
@@ -99,15 +115,20 @@ async function ask(prompt: string): Promise<string> {
       generationConfig: {
         temperature:     0.8,
         // Plenty of headroom for the JSON-returning prompts (Pulse, Team Report,
-        // What If, Spotlight reel, etc.). 350 was truncating responses mid-JSON,
-        // which made the JSON.parse step fail and surfaced as "Gemini error".
+        // What If, Spotlight reel, etc.).
         maxOutputTokens: 2048,
+        // Both 2.5 models burn tokens on internal "thinking" by default.
+        // Zero it out so the full 2048 goes to our actual response.
+        thinkingConfig:  { thinkingBudget: 0 },
       },
     });
 
     // One retry with backoff on 429 (rate limit) or 503 (transient).
+    // If the SHARP tier rate-limits, the retry falls back to the FAST tier so
+    // the user never sees a hard error from a per-model minute cap.
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(GEMINI_URL, {
+      const url = attempt === 1 && tier === 'sharp' ? urlFor('fast') : urlFor(tier);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
@@ -148,29 +169,31 @@ export const gemini = {
   chat: (question: string, sport: string) =>
     ask(`User's fantasy ${sport} question: ${question.trim()}\n\nAnswer it directly. If they ask about a player, give the call. If they ask about waivers/trades/strategy, give actionable advice. Don't restate the question.`),
 
+  // High-volume noisy calls → fast tier (cheaper, higher daily quota)
   playerAnalysis: (name: string, position: string, team: string, sport: string) =>
-    ask(`Fantasy ${sport} analysis for ${name} (${position}, ${team}). Key strengths, risks, and current fantasy value.`),
+    ask(`Fantasy ${sport} analysis for ${name} (${position}, ${team}). Key strengths, risks, and current fantasy value.`, 'fast'),
 
+  addDropAdvice: (addPlayer: string, dropPlayer: string, sport: string) =>
+    ask(`Fantasy ${sport}: Should I drop ${dropPlayer} to add ${addPlayer}? Give me a sharp take.`, 'fast'),
+
+  injuryImpact: (player: string, injury: string, sport: string) =>
+    ask(`Fantasy ${sport} injury impact: ${player} is ${injury}. How does this affect their fantasy value and their team's other players?`, 'fast'),
+
+  draftPickAdvice: (player: string, round: number, pick: number, sport: string) =>
+    ask(`Is ${player} a good pick at round ${round}, pick ${pick} in a fantasy ${sport} draft? Quick verdict.`, 'fast'),
+
+  articleTake: (headline: string, sport: string) =>
+    ask(`Fantasy ${sport} take on this news: "${headline}". What does this mean for fantasy managers?`, 'fast'),
+
+  comparePlayers: (player1: string, player2: string, sport: string) =>
+    ask(`Fantasy ${sport}: ${player1} vs ${player2}. Who should I start this week and why? Sharp take only.`, 'fast'),
+
+  // Higher-value one-off calls → sharp tier (best free model)
   tradeAdvice: (give: string[], receive: string[], sport: string) =>
     ask(`Fantasy ${sport} trade evaluation. Giving: ${give.join(', ')}. Receiving: ${receive.join(', ')}. Should I do this trade? Who wins?`),
 
-  addDropAdvice: (addPlayer: string, dropPlayer: string, sport: string) =>
-    ask(`Fantasy ${sport}: Should I drop ${dropPlayer} to add ${addPlayer}? Give me a sharp take.`),
-
-  injuryImpact: (player: string, injury: string, sport: string) =>
-    ask(`Fantasy ${sport} injury impact: ${player} is ${injury}. How does this affect their fantasy value and their team's other players?`),
-
-  draftPickAdvice: (player: string, round: number, pick: number, sport: string) =>
-    ask(`Is ${player} a good pick at round ${round}, pick ${pick} in a fantasy ${sport} draft? Quick verdict.`),
-
   gmWeeklyReport: (roster: string[], sport: string) =>
     ask(`Fantasy ${sport} weekly GM report for this roster: ${roster.join(', ')}. Top priorities this week, who to start, key waiver targets.`),
-
-  articleTake: (headline: string, sport: string) =>
-    ask(`Fantasy ${sport} take on this news: "${headline}". What does this mean for fantasy managers?`),
-
-  comparePlayers: (player1: string, player2: string, sport: string) =>
-    ask(`Fantasy ${sport}: ${player1} vs ${player2}. Who should I start this week and why? Sharp take only.`),
 
   draftRecapGrade: (picks: string[], sport: string) =>
     ask(`Grade this fantasy ${sport} draft: ${picks.join(', ')}. Overall grade (A-F), biggest win, biggest reach, and one bold prediction.`),
