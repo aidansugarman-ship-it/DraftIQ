@@ -22,6 +22,8 @@ import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
 import { LineupAlertsCard } from '@components/shared/LineupAlertsCard';
+import { TabSwitcher } from '@components/shared/TabSwitcher';
+import { ROSTER_TABS } from '@components/shared/hubTabs';
 
 interface LineupCall {
   name:       string;
@@ -103,7 +105,8 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
     <View style={styles.container}>
       <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PageHeader title="Lineup Optimizer" />
+        <PageHeader title="Roster Tools" />
+        <TabSwitcher tabs={ROSTER_TABS} activeKey="optimize" />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!hasLeague ? (

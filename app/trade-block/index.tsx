@@ -17,6 +17,8 @@ import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { EmptyState } from '@components/shared/EmptyState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
+import { TabSwitcher } from '@components/shared/TabSwitcher';
+import { TRADE_TABS } from '@components/shared/hubTabs';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { SPORTS } from '@constants/sports';
@@ -101,7 +103,8 @@ Skip managers where ${playerName} is a clear mismatch. Real player names. TikTok
     <View style={styles.container}>
       <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PageHeader title="Trade Block" />
+        <PageHeader title="Trade Center" />
+        <TabSwitcher tabs={TRADE_TABS} activeKey="block" />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!active ? (

@@ -24,17 +24,25 @@ import { useGlossaryStore } from '@store/useGlossaryStore';
 const cache: Record<string, string> = {};
 
 export function GlossaryTerm({ term, children }: { term: string; children?: string }) {
-  const show = useGlossaryStore(s => s.show);
+  const show       = useGlossaryStore(s => s.show);
+  const dismissed  = useGlossaryStore(s => s.isDismissed(term));
+  // Once dismissed, the term is still tappable but renders without the
+  // dotted underline — no visual nag.
   return (
-    <Text onPress={() => show(term)} style={styles.term} suppressHighlighting>
+    <Text
+      onPress={() => show(term)}
+      style={dismissed ? styles.termDismissed : styles.term}
+      suppressHighlighting
+    >
       {children ?? term}
     </Text>
   );
 }
 
 export function GlossaryModalHost() {
-  const term = useGlossaryStore(s => s.term);
-  const hide = useGlossaryStore(s => s.hide);
+  const term     = useGlossaryStore(s => s.term);
+  const hide     = useGlossaryStore(s => s.hide);
+  const dismiss  = useGlossaryStore(s => s.dismiss);
 
   const [text, setText]       = useState('');
   const [loading, setLoading] = useState(false);
@@ -83,9 +91,18 @@ export function GlossaryModalHost() {
               </Text>
             )}
           </ScrollView>
-          <TouchableOpacity style={styles.gotIt} onPress={hide} activeOpacity={0.8}>
-            <Text variant="bodyMedium" style={{ color: colors.background }}>Got it</Text>
-          </TouchableOpacity>
+          <View style={styles.btnRow}>
+            <TouchableOpacity
+              style={styles.gotItForever}
+              onPress={() => term && dismiss(term)}
+              activeOpacity={0.75}
+            >
+              <Text variant="bodySmall" color={colors.textTertiary}>Got it forever</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.gotIt} onPress={hide} activeOpacity={0.8}>
+              <Text variant="bodyMedium" style={{ color: colors.background, fontWeight: '700' }}>Got it</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -97,6 +114,20 @@ const styles = StyleSheet.create({
     color:               colors.green,
     textDecorationLine:  'underline',
     textDecorationStyle: 'dotted',
+  },
+  termDismissed: {
+    color: 'inherit' as any,
+  },
+  btnRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:      spacing.md,
+    gap:            spacing.md,
+  },
+  gotItForever: {
+    paddingVertical:   spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
   overlay: {
     flex:            1,
@@ -127,10 +158,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   gotIt: {
-    backgroundColor: colors.green,
-    borderRadius:    radius.md,
-    paddingVertical: spacing.md,
-    alignItems:      'center',
-    marginTop:       spacing.md,
+    backgroundColor:   colors.green,
+    borderRadius:      radius.md,
+    paddingVertical:   spacing.md,
+    paddingHorizontal: spacing.xl,
+    alignItems:        'center',
+    flex:              1,
   },
 });

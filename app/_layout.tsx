@@ -15,6 +15,7 @@ import { useTradeBlockStore } from '@store/useTradeBlockStore';
 import { useDraftVaultStore } from '@store/useDraftVaultStore';
 import { useAlertsStore } from '@store/useAlertsStore';
 import { useFirstRunStore } from '@store/useFirstRunStore';
+import { useGlossaryStore } from '@store/useGlossaryStore';
 import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
@@ -115,6 +116,7 @@ export default function RootLayout() {
     useTradeBlockStore.getState().hydrate();
     useDraftVaultStore.getState().hydrate();
     useFirstRunStore.getState().hydrate();
+    useGlossaryStore.getState().hydrate();
     useAlertsStore.getState().hydrate().then(() => {
       // After alerts hydrate, the scanner can check them too
       scanWatchlistForNews();

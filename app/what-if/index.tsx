@@ -16,6 +16,8 @@ import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SportTint } from '@components/shared/SportTint';
+import { TabSwitcher } from '@components/shared/TabSwitcher';
+import { ROSTER_TABS } from '@components/shared/hubTabs';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { SPORTS } from '@constants/sports';
@@ -107,7 +109,8 @@ Real player names. Be honest about both sides.`;
     <View style={styles.container}>
       <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PageHeader title="What If" />
+        <PageHeader title="Roster Tools" />
+        <TabSwitcher tabs={ROSTER_TABS} activeKey="simulate" />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {!hasLeague ? (

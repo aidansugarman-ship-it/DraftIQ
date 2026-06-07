@@ -3,6 +3,7 @@ import { View, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@components/ui/Text';
 import { Sticker } from '@components/shared/Sticker';
+import { JargonText } from '@components/shared/JargonText';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { SPORTS, type SportId } from '@constants/sports';
@@ -107,9 +108,9 @@ Real, current players from the headlines or known stars. No fluff.`;
           {/* Headline take */}
           <View style={styles.takeBox}>
             <Sticker variant="fire" />
-            <Text variant="bodyLarge" color={colors.textPrimary} style={styles.takeText}>
-              "{pulse.headline}"
-            </Text>
+            <JargonText variant="bodyLarge" color={colors.textPrimary} style={styles.takeText}>
+              {`"${pulse.headline}"`}
+            </JargonText>
           </View>
 
           {/* Hot / Cold splits */}

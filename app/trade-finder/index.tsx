@@ -21,6 +21,8 @@ import { EmptyState } from '@components/shared/EmptyState';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
+import { TabSwitcher } from '@components/shared/TabSwitcher';
+import { TRADE_TABS } from '@components/shared/hubTabs';
 
 interface TradeIdea {
   withTeam: string;
@@ -115,7 +117,8 @@ TikTok creator voice. No fluff. Real player names only.`;
     <View style={styles.container}>
       <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PageHeader title="Trade Finder" />
+        <PageHeader title="Trade Center" />
+        <TabSwitcher tabs={TRADE_TABS} activeKey="finder" />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!active ? (

@@ -21,6 +21,8 @@ import { EmptyState } from '@components/shared/EmptyState';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
+import { TabSwitcher } from '@components/shared/TabSwitcher';
+import { ROSTER_TABS } from '@components/shared/hubTabs';
 
 interface PosGrade { pos: string; grade: string; note: string }
 interface Report {
@@ -118,7 +120,8 @@ Be honest and specific. Real evaluations, not flattery.`;
     <View style={styles.container}>
       <SportTint sport={sport} />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PageHeader title="Team Report" />
+        <PageHeader title="Roster Tools" />
+        <TabSwitcher tabs={ROSTER_TABS} activeKey="grade" />
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {!hasLeague ? (

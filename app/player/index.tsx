@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Text } from '@components/ui/Text';
 import { Sticker } from '@components/shared/Sticker';
+import { JargonText } from '@components/shared/JargonText';
 import { PlayerAvatar } from '@components/shared/PlayerAvatar';
 import { TeamLogo } from '@components/shared/TeamLogo';
 import { FavoriteButton } from '@components/shared/FavoriteButton';
@@ -185,9 +186,9 @@ TikTok creator voice. Real, current context. No fluff.`;
               {!!report.bio && (
                 <View style={styles.card}>
                   <Text style={styles.sectionLabel}>WHO HE IS</Text>
-                  <Text variant="body" color={colors.textPrimary} style={{ lineHeight: 22 }}>
+                  <JargonText variant="body" color={colors.textPrimary} style={{ lineHeight: 22 }}>
                     {report.bio}
-                  </Text>
+                  </JargonText>
                 </View>
               )}
 
@@ -204,9 +205,9 @@ TikTok creator voice. Real, current context. No fluff.`;
                     <Ionicons name="flash" size={14} color={colors.green} />
                     <Text style={[styles.sectionLabel, { color: colors.green, marginBottom: 0 }]}>THE TAKE</Text>
                   </View>
-                  <Text variant="bodyLarge" color={colors.textPrimary} style={{ lineHeight: 24, fontWeight: '600' }}>
+                  <JargonText variant="bodyLarge" color={colors.textPrimary} style={{ lineHeight: 24, fontWeight: '600' }}>
                     {report.take}
-                  </Text>
+                  </JargonText>
                 </View>
               )}
 

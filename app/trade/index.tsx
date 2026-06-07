@@ -33,6 +33,8 @@ import { useYahooStore } from '@store/useYahooStore';
 import { espn, EspnNewsItem } from '@services/espn';
 import { yahooFantasy, type YahooTeam, type YahooRosterPlayer } from '@services/yahooFantasy';
 import { SPORTS, type SportId } from '@constants/sports';
+import { TabSwitcher } from '@components/shared/TabSwitcher';
+import { TRADE_TABS } from '@components/shared/hubTabs';
 import { SportSwitcher } from '@components/ui/SportSwitcher';
 import { SportTint } from '@components/shared/SportTint';
 
@@ -910,9 +912,10 @@ TikTok creator voice: confident, brief, opinionated. No fluff. No disclaimers.`;
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text variant="bodyMedium" color={colors.textPrimary}>Trade Analyzer</Text>
+          <Text variant="bodyMedium" color={colors.textPrimary}>Trade Center</Text>
           <View style={{ width: 36 }} />
         </View>
+        <TabSwitcher tabs={TRADE_TABS} activeKey="analyzer" />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
