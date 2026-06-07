@@ -172,9 +172,10 @@ const styles = StyleSheet.create({
     gap:             6,
   },
   takeText: {
-    fontSize:   18,
-    fontWeight: '700',
-    lineHeight: 24,
+    fontSize:      26,
+    fontWeight:    '800',
+    lineHeight:    32,
+    letterSpacing: -0.5,
   },
   splitRow: {
     flexDirection: 'row',

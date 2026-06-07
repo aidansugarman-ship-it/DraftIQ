@@ -14,6 +14,7 @@ import { useTakesLog } from '@store/useTakesLog';
 import { useTradeBlockStore } from '@store/useTradeBlockStore';
 import { useDraftVaultStore } from '@store/useDraftVaultStore';
 import { useAlertsStore } from '@store/useAlertsStore';
+import { useFirstRunStore } from '@store/useFirstRunStore';
 import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
@@ -113,6 +114,7 @@ export default function RootLayout() {
     useTakesLog.getState().hydrate();
     useTradeBlockStore.getState().hydrate();
     useDraftVaultStore.getState().hydrate();
+    useFirstRunStore.getState().hydrate();
     useAlertsStore.getState().hydrate().then(() => {
       // After alerts hydrate, the scanner can check them too
       scanWatchlistForNews();

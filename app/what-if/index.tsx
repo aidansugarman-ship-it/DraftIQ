@@ -37,16 +37,24 @@ export default function WhatIfScreen() {
   const sportDef = SPORTS[sport];
   const { roster, hasLeague } = useMyRoster(sport);
 
+  const [mode, setMode]         = useState<'external' | 'internal'>('external');
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [addName, setAddName]   = useState('');
+  const [addId, setAddId]       = useState<string | null>(null);
   const [result, setResult]     = useState<Comparison | null>(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
   const removedPlayer = roster?.players.find(p => p.id === removeId);
+  const addedPlayer   = roster?.players.find(p => p.id === addId);
 
   async function run() {
-    if (!roster || !removedPlayer || !addName.trim()) return;
+    if (!roster || !removedPlayer) return;
+    const replacementDesc = mode === 'external'
+      ? addName.trim()
+      : addedPlayer?.name;
+    if (!replacementDesc) return;
+
     setLoading(true);
     setError('');
     setResult(null);
@@ -55,11 +63,15 @@ export default function WhatIfScreen() {
         .map(p => `${p.name} (${p.position}, ${p.team})${p.isStarter ? ' [STARTER]' : ' [BENCH]'}${p.injury ? `, ${p.injury.status}` : ''}`)
         .join(', ');
 
+      const swapDescription = mode === 'external'
+        ? `swap OUT ${removedPlayer.name} (${removedPlayer.position}) for ${replacementDesc} (a player NOT currently on my roster)`
+        : `swap the lineup slot — START ${replacementDesc} instead of ${removedPlayer.name} (${removedPlayer.position})`;
+
       const prompt = `${sportDef.shortLabel} fantasy what-if simulation.
 
 CURRENT ROSTER: ${rosterStr}
 
-WHAT IF I swap OUT ${removedPlayer.name} (${removedPlayer.position}) for ${addName.trim()}?
+WHAT IF I ${swapDescription}?
 
 Output EXACT JSON, nothing else:
 {
@@ -106,50 +118,114 @@ Real player names. Be honest about both sides.`;
             <>
               <Text style={styles.title}>WHAT IF…</Text>
               <Text variant="bodySmall" color={colors.textTertiary} style={{ marginBottom: spacing.lg }}>
-                Swap any one of your players for someone else — AI shows you exactly what you gain & lose.
+                Swap any one of your players — AI shows you exactly what you gain & lose.
               </Text>
 
-              {/* Step 1 — pick player to remove */}
-              <Text style={styles.stepLabel}>1 · TAP A PLAYER TO REMOVE</Text>
-              <View style={styles.chipWrap}>
-                {roster.players.map(p => {
-                  const on = removeId === p.id;
-                  return (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[styles.chip, on && styles.chipOn]}
-                      onPress={() => setRemoveId(on ? null : p.id)}
-                      activeOpacity={0.75}
-                    >
-                      <Text variant="caption" style={{
-                        color: on ? colors.coral : colors.textSecondary,
-                        fontWeight: on ? '700' : '500',
-                      }}>
-                        {on ? '✗ ' : ''}{p.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              {/* Mode toggle */}
+              <View style={styles.modeRow}>
+                <TouchableOpacity
+                  style={[styles.modeBtn, mode === 'external' && styles.modeBtnOn]}
+                  onPress={() => setMode('external')}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="search" size={14} color={mode === 'external' ? colors.textPrimary : colors.textTertiary} />
+                  <Text variant="caption" style={{
+                    color: mode === 'external' ? colors.textPrimary : colors.textTertiary,
+                    fontWeight: mode === 'external' ? '700' : '500',
+                  }}>
+                    SWAP WITH ANYONE
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeBtn, mode === 'internal' && styles.modeBtnOn]}
+                  onPress={() => setMode('internal')}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="people" size={14} color={mode === 'internal' ? colors.textPrimary : colors.textTertiary} />
+                  <Text variant="caption" style={{
+                    color: mode === 'internal' ? colors.textPrimary : colors.textTertiary,
+                    fontWeight: mode === 'internal' ? '700' : '500',
+                  }}>
+                    SWAP WITHIN MY TEAM
+                  </Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Step 2 — type replacement */}
-              <Text style={[styles.stepLabel, { marginTop: spacing.lg }]}>2 · TYPE A REPLACEMENT</Text>
-              <View style={styles.inputWrap}>
-                <Ionicons name="search" size={14} color={colors.textTertiary} />
-                <TextInput
-                  style={styles.input}
-                  placeholder={`Any ${sportDef.shortLabel} player`}
-                  placeholderTextColor={colors.textTertiary}
-                  value={addName}
-                  onChangeText={setAddName}
-                />
+              {/* Step 1 — pick player to remove */}
+              <Text style={styles.stepLabel}>
+                1 · TAP A {mode === 'internal' ? 'STARTER' : 'PLAYER'} TO {mode === 'internal' ? 'BENCH' : 'REMOVE'}
+              </Text>
+              <View style={styles.chipWrap}>
+                {roster.players
+                  .filter(p => mode === 'internal' ? p.isStarter : true)
+                  .map(p => {
+                    const on = removeId === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.chip, on && styles.chipOn]}
+                        onPress={() => setRemoveId(on ? null : p.id)}
+                        activeOpacity={0.75}
+                      >
+                        <Text variant="caption" style={{
+                          color: on ? colors.coral : colors.textSecondary,
+                          fontWeight: on ? '700' : '500',
+                        }}>
+                          {on ? '✗ ' : ''}{p.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
               </View>
+
+              {/* Step 2 — pick replacement */}
+              <Text style={[styles.stepLabel, { marginTop: spacing.lg }]}>
+                2 · {mode === 'internal' ? 'TAP A BENCH PLAYER TO START INSTEAD' : 'TYPE A REPLACEMENT'}
+              </Text>
+              {mode === 'internal' ? (
+                <View style={styles.chipWrap}>
+                  {roster.players
+                    .filter(p => !p.isStarter && p.id !== removeId)
+                    .map(p => {
+                      const on = addId === p.id;
+                      return (
+                        <TouchableOpacity
+                          key={p.id}
+                          style={[styles.chip, on && styles.chipOnGreen]}
+                          onPress={() => setAddId(on ? null : p.id)}
+                          activeOpacity={0.75}
+                        >
+                          <Text variant="caption" style={{
+                            color: on ? colors.green : colors.textSecondary,
+                            fontWeight: on ? '700' : '500',
+                          }}>
+                            {on ? '✓ ' : ''}{p.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </View>
+              ) : (
+                <View style={styles.inputWrap}>
+                  <Ionicons name="search" size={14} color={colors.textTertiary} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={`Any ${sportDef.shortLabel} player`}
+                    placeholderTextColor={colors.textTertiary}
+                    value={addName}
+                    onChangeText={setAddName}
+                  />
+                </View>
+              )}
 
               {/* Step 3 — run */}
               <TouchableOpacity
-                style={[styles.runBtn, (!removeId || !addName.trim() || loading) && styles.runBtnDisabled]}
+                style={[
+                  styles.runBtn,
+                  (!removeId || (mode === 'external' ? !addName.trim() : !addId) || loading) && styles.runBtnDisabled,
+                ]}
                 onPress={run}
-                disabled={!removeId || !addName.trim() || loading}
+                disabled={!removeId || (mode === 'external' ? !addName.trim() : !addId) || loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
@@ -261,6 +337,31 @@ const styles = StyleSheet.create({
   chipOn: {
     backgroundColor: `${colors.coral}1A`,
     borderColor:     `${colors.coral}55`,
+  },
+  chipOnGreen: {
+    backgroundColor: `${colors.green}1A`,
+    borderColor:     `${colors.green}55`,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap:           6,
+    marginBottom:  spacing.lg,
+  },
+  modeBtn: {
+    flex:              1,
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'center',
+    gap:               6,
+    paddingVertical:   spacing.sm,
+    borderRadius:      radius.md,
+    backgroundColor:   colors.surface,
+    borderWidth:       1,
+    borderColor:       colors.border,
+  },
+  modeBtnOn: {
+    backgroundColor: `${colors.green}1A`,
+    borderColor:     `${colors.green}55`,
   },
   inputWrap: {
     flexDirection:   'row',

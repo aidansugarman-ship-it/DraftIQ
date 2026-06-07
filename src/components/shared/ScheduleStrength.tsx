@@ -129,21 +129,27 @@ Use real upcoming opponents and matchup context. Be honest.`;
           <Text key={w} variant="caption" color={colors.textTertiary} style={styles.weekHeader}>{w}</Text>
         ))}
       </View>
-      {grid.rows.map((r, i) => (
-        <View key={`${r.player}-${i}`} style={[styles.row, i < grid.rows.length - 1 && styles.border]}>
-          <View style={{ flex: 1 }}>
-            <Text variant="bodySmallMedium" color={colors.textPrimary} numberOfLines={1}>{r.player}</Text>
-            <Text variant="caption" color={colors.textTertiary}>{r.pos} · {r.team}</Text>
-          </View>
-          {r.cells.map((c, j) => (
-            <View key={`${c.week}-${j}`} style={[styles.cell, { backgroundColor: `${COLOR[c.difficulty]}25`, borderColor: `${COLOR[c.difficulty]}80` }]}>
-              <Text variant="labelSmall" style={{ color: COLOR[c.difficulty], fontSize: 9 }}>
-                {c.difficulty === 'bye' ? 'BYE' : c.difficulty.toUpperCase()}
-              </Text>
+      {grid.rows.map((r, i) => {
+        const allBad   = r.cells.length > 0 && r.cells.every(c => c.difficulty === 'hard' || c.difficulty === 'bye');
+        const allGreat = r.cells.length > 0 && r.cells.every(c => c.difficulty === 'easy');
+        const nameColor = allBad ? colors.coral : allGreat ? colors.green : colors.textPrimary;
+        const nameOpacity = allBad ? 0.6 : 1;
+        return (
+          <View key={`${r.player}-${i}`} style={[styles.row, i < grid.rows.length - 1 && styles.border, { opacity: nameOpacity }]}>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" style={{ color: nameColor, fontWeight: '700' }} numberOfLines={1}>{r.player}</Text>
+              <Text variant="caption" color={colors.textTertiary}>{r.pos} · {r.team}</Text>
             </View>
-          ))}
-        </View>
-      ))}
+            {r.cells.map((c, j) => (
+              <View key={`${c.week}-${j}`} style={[styles.cell, { backgroundColor: `${COLOR[c.difficulty]}30`, borderColor: `${COLOR[c.difficulty]}90` }]}>
+                <Text style={{ color: COLOR[c.difficulty], fontSize: 11, fontWeight: '800', letterSpacing: 0.4 }}>
+                  {c.difficulty === 'bye' ? 'BYE' : c.difficulty === 'easy' ? 'GO' : c.difficulty === 'hard' ? 'NO' : 'TBD'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
       <View style={styles.legend}>
         <LegendDot color={COLOR.easy} label="EASY" />
         <LegendDot color={COLOR.medium} label="MED" />
@@ -184,27 +190,29 @@ const styles = StyleSheet.create({
     marginBottom:  spacing.xs,
   },
   weekHeader: {
-    width:      52,
+    width:      64,
     textAlign:  'center',
-    fontSize:   10,
-    letterSpacing: 0.6,
+    fontSize:   11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   row: {
     flexDirection:   'row',
     alignItems:      'center',
-    gap:             6,
-    paddingVertical: spacing.sm,
+    gap:             8,
+    paddingVertical: spacing.md,
   },
   border: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   cell: {
-    width:           52,
-    paddingVertical: 5,
-    borderRadius:    radius.sm,
-    borderWidth:     1,
+    width:           64,
+    paddingVertical: 10,
+    borderRadius:    radius.md,
+    borderWidth:     1.5,
     alignItems:      'center',
+    justifyContent:  'center',
   },
   legend: {
     flexDirection: 'row',

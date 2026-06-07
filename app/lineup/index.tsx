@@ -140,35 +140,36 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
                 </Text>
               </View>
 
-              {/* Moves to make */}
+              {/* Moves to make — paired as swaps when possible */}
               {changes.length > 0 && (
                 <>
-                  <Text style={styles.sectionLabel}>MOVES TO MAKE · {changes.length}</Text>
-                  {changes.map((c, i) => (
-                    <View key={`${c.name}-${i}`} style={[styles.moveCard, {
-                      borderLeftColor: c.slot === 'START' ? colors.green : colors.coral,
-                    }]}>
-                      <View style={styles.moveTop}>
-                        <View style={[styles.slotPill, {
-                          backgroundColor: `${c.slot === 'START' ? colors.green : colors.coral}1A`,
-                        }]}>
-                          <Ionicons
-                            name={c.slot === 'START' ? 'arrow-up' : 'arrow-down'}
-                            size={11}
-                            color={c.slot === 'START' ? colors.green : colors.coral}
-                          />
-                          <Text variant="labelSmall" style={{
-                            color: c.slot === 'START' ? colors.green : colors.coral, fontSize: 10,
-                          }}>
-                            {c.slot}
+                  <Text style={styles.sectionLabel}>SWAPS TO MAKE · {changes.length}</Text>
+                  {pairSwaps(changes).map((swap, i) => (
+                    <View key={`swap-${i}`} style={styles.swapCard}>
+                      {swap.out && (
+                        <View style={[styles.swapRow, { borderLeftColor: colors.coral }]}>
+                          <View style={[styles.slotPill, { backgroundColor: `${colors.coral}1A` }]}>
+                            <Ionicons name="arrow-down" size={11} color={colors.coral} />
+                            <Text variant="labelSmall" style={{ color: colors.coral, fontSize: 10 }}>BENCH</Text>
+                          </View>
+                          <Text variant="bodyMedium" color={colors.textPrimary} style={{ flex: 1 }}>
+                            {swap.out.name}
                           </Text>
                         </View>
-                        <Text variant="bodyMedium" color={colors.textPrimary} style={{ flex: 1 }}>
-                          {c.name}
-                        </Text>
-                      </View>
-                      <Text variant="bodySmall" color={colors.textSecondary} style={{ marginTop: 4, lineHeight: 18 }}>
-                        {c.reason}
+                      )}
+                      {swap.in && (
+                        <View style={[styles.swapRow, { borderLeftColor: colors.green }]}>
+                          <View style={[styles.slotPill, { backgroundColor: `${colors.green}1A` }]}>
+                            <Ionicons name="arrow-up" size={11} color={colors.green} />
+                            <Text variant="labelSmall" style={{ color: colors.green, fontSize: 10 }}>START</Text>
+                          </View>
+                          <Text variant="bodyMedium" color={colors.textPrimary} style={{ flex: 1 }}>
+                            {swap.in.name}
+                          </Text>
+                        </View>
+                      )}
+                      <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 18, marginTop: 4 }}>
+                        {swap.reason}
                       </Text>
                     </View>
                   ))}
@@ -209,6 +210,32 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
       </SafeAreaView>
     </View>
   );
+}
+
+/**
+ * Pair up BENCH and START moves into single "swap" cards.
+ * We greedily match the highest-confidence STARTs against any BENCH, then
+ * spill anything unpaired into solo cards so nothing's lost.
+ */
+function pairSwaps(changes: LineupCall[]): Array<{ in?: LineupCall; out?: LineupCall; reason: string }> {
+  const starts = changes.filter(c => c.slot === 'START').sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  const benches = changes.filter(c => c.slot === 'BENCH');
+  const swaps: Array<{ in?: LineupCall; out?: LineupCall; reason: string }> = [];
+  const usedBench = new Set<string>();
+  for (const startCall of starts) {
+    const benchPick = benches.find(b => !usedBench.has(b.name));
+    if (benchPick) {
+      usedBench.add(benchPick.name);
+      swaps.push({ in: startCall, out: benchPick, reason: startCall.reason || benchPick.reason });
+    } else {
+      swaps.push({ in: startCall, reason: startCall.reason });
+    }
+  }
+  // Any benches without a paired START
+  for (const b of benches) {
+    if (!usedBench.has(b.name)) swaps.push({ out: b, reason: b.reason });
+  }
+  return swaps;
 }
 
 function LineupRow({ call, last }: { call: LineupCall; last: boolean }) {
@@ -307,6 +334,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems:    'center',
     gap:           spacing.sm,
+  },
+  swapCard: {
+    backgroundColor: colors.surface,
+    borderRadius:    radius.lg,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    padding:         spacing.base,
+    marginBottom:    spacing.sm,
+    gap:             spacing.sm,
+  },
+  swapRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             spacing.sm,
+    paddingLeft:     spacing.sm,
+    borderLeftWidth: 3,
   },
   slotPill: {
     flexDirection:     'row',

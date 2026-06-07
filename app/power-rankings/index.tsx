@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -158,6 +159,7 @@ const moverStyles = StyleSheet.create({
 });
 
 function TeamCard({ team }: { team: RankedTeam }) {
+  const [open, setOpen] = useState(false);
   const rankColor =
     team.rank === 1 ? colors.gold :
     team.rank === 2 ? '#C0C0C0' :
@@ -167,7 +169,7 @@ function TeamCard({ team }: { team: RankedTeam }) {
   const trendIcon = team.trend === 'up' ? '📈' : team.trend === 'down' ? '📉' : '➖';
 
   return (
-    <View style={cardStyles.wrap}>
+    <TouchableOpacity style={cardStyles.wrap} onPress={() => setOpen(o => !o)} activeOpacity={0.75}>
       <View style={[cardStyles.rankBubble, { borderColor: rankColor }]}>
         <Text style={[cardStyles.rankText, { color: rankColor }]}>#{team.rank}</Text>
         {team.delta != null && team.delta !== 0 && (
@@ -201,8 +203,25 @@ function TeamCard({ team }: { team: RankedTeam }) {
             </Text>
           </View>
         )}
+        {open && (
+          <View style={cardStyles.expanded}>
+            {team.topPlayers.length > 0 && (
+              <>
+                <Text style={cardStyles.expandedLabel}>STAR ROSTER</Text>
+                <View style={cardStyles.rosterRow}>
+                  {team.topPlayers.map((p, i) => (
+                    <View key={i} style={cardStyles.starPill}>
+                      <Text variant="caption" color={colors.textPrimary}>{p}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
       </View>
-    </View>
+      <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textTertiary} style={{ marginLeft: 4, alignSelf: 'flex-start', marginTop: 6 }} />
+    </TouchableOpacity>
   );
 }
 
@@ -274,5 +293,31 @@ const cardStyles = StyleSheet.create({
     paddingTop:      6,
     borderTopWidth:  1,
     borderTopColor:  colors.border,
+  },
+  expanded: {
+    marginTop:      spacing.sm,
+    paddingTop:     spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  expandedLabel: {
+    fontSize:      10,
+    fontWeight:    '800',
+    color:         colors.textTertiary,
+    letterSpacing: 1,
+    marginBottom:  6,
+  },
+  rosterRow: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           6,
+  },
+  starPill: {
+    paddingHorizontal: 8,
+    paddingVertical:   4,
+    borderRadius:      999,
+    backgroundColor:   colors.background,
+    borderWidth:       1,
+    borderColor:       colors.border,
   },
 });
