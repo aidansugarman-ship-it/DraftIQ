@@ -12,6 +12,7 @@ import { mlbStats } from '@services/mlbStats';
 import { nhlStats } from '@services/nhlStats';
 import { gemini } from '@services/gemini';
 import { yahooFantasy, type YahooRosterPlayer } from '@services/yahooFantasy';
+import { useMyRoster } from '@hooks/useMyRoster';
 import { router } from 'expo-router';
 import { useUserStore } from '@store/useUserStore';
 import { useYahooStore } from '@store/useYahooStore';
@@ -627,7 +628,7 @@ interface ScoutReport {
   verdict: string;
 }
 
-function YahooWaiverRow({ player, index, sportLabel, sport, autoOpen }: { player: YahooRosterPlayer; index: number; sportLabel: string; sport: SportId; autoOpen?: boolean }) {
+function YahooWaiverRow({ player, index, sportLabel, sport, autoOpen, rosterContext }: { player: YahooRosterPlayer; index: number; sportLabel: string; sport: SportId; autoOpen?: boolean; rosterContext?: string }) {
   const [report, setReport]   = useState<ScoutReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen]       = useState(!!autoOpen);
@@ -637,13 +638,21 @@ function YahooWaiverRow({ player, index, sportLabel, sport, autoOpen }: { player
   const fetchReport = useCallback(() => {
     if (report || loading) return;
     setLoading(true);
-    const prompt = `Quick scout report on ${player.name} (${player.position}, ${player.team}) for ${sportLabel} fantasy.
+    const rosterBlock = rosterContext
+      ? `
+
+USER'S CURRENT ROSTER: ${rosterContext}
+
+Important: evaluate fit FOR THIS ROSTER — not generic. If the user is already loaded at this position, say so even if the player is ranked highly elsewhere. If they have a hole this player fills, lean in. Be specific about WHICH player on the user's bench/starting lineup this changes.`
+      : '';
+
+    const prompt = `Scout report on ${player.name} (${player.position}, ${player.team}) for ${sportLabel} fantasy.${rosterBlock}
 
 Output EXACT JSON, nothing else:
 {
   "bio":     "1-2 sentences — who they are, their team, current role",
-  "stats":   "their key season/recent stats — like '24 HR / .298 AVG / .945 OPS' for MLB, '28 PPG / 8 RPG' for NBA",
-  "verdict": "ADD or HOLD plus 1-2 sentence why — TikTok creator voice, confident"
+  "stats":   "their key season/recent stats — like '24 HR / .298 AVG / .945 OPS' for MLB, '28 PPG / 8 RPG' for NBA, '12 G / 18 A / 32 P' for NHL, '6 TDs / 1140 YDS' for NFL",
+  "verdict": "ADD or HOLD plus 2-3 sentences — explain SPECIFICALLY why he fits or doesn't fit THIS user's roster. Reference an actual player from their roster he'd replace/back up. TikTok creator voice, confident, opinionated."
 }`;
     gemini.chat(prompt, sportLabel)
       .then((raw) => {
@@ -746,9 +755,18 @@ Output EXACT JSON, nothing else:
 
 function YahooWaiverSection({ sport }: { sport: SportId }) {
   const active = useYahooStore(s => s.active[sport]);
+  const { roster } = useMyRoster(sport);
   const [players, setPlayers] = useState<YahooRosterPlayer[]>([]);
   const [loading, setLoading] = useState(false);
   const [errored, setErrored] = useState(false);
+
+  // Compact roster summary used to personalize the scout report verdicts —
+  // "yes add him, you're paper-thin at RB" instead of generic ranks.
+  const rosterContext = roster
+    ? roster.players
+        .map(p => `${p.name} (${p.position}, ${p.isStarter ? 'STARTER' : 'BENCH'}${p.injury ? `, ${p.injury.status}` : ''})`)
+        .join(', ')
+    : '';
 
   useEffect(() => {
     if (!active) return;
@@ -793,6 +811,7 @@ function YahooWaiverSection({ sport }: { sport: SportId }) {
               sport={sport}
               sportLabel={SPORTS[sport].shortLabel}
               autoOpen={i < 5}
+              rosterContext={rosterContext}
             />
           ))}
         </>
