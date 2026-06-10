@@ -34,9 +34,9 @@ export function TooNewButton({ topic, sport }: { topic: string; sport?: SportId 
     setLoading(true);
     const prompt = `I'm brand new to ${sportLabel} fantasy. In plain, friendly language explain: ${topic}.
 Keep it short — 2 to 4 sentences or a tiny bullet list. Use ${sportLabel} examples a beginner would get. No jargon without explaining it. Encouraging tone.`;
-    gemini.chat(prompt, sportLabel)
-      .then(setText)
-      .catch(() => setText("Couldn't load an explanation right now — give it another tap in a sec."))
+    gemini.beginnerExplainer(prompt, sportLabel)
+      .then((res) => setText(res || "No explanation came back — try again in a sec."))
+      .catch((e) => setText(`Couldn't load an explanation: ${e?.message ?? 'unknown error'}`))
       .finally(() => setLoading(false));
   }
 

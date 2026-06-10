@@ -169,6 +169,10 @@ export const gemini = {
   chat: (question: string, sport: string) =>
     ask(`User's fantasy ${sport} question: ${question.trim()}\n\nAnswer it directly. If they ask about a player, give the call. If they ask about waivers/trades/strategy, give actionable advice. Don't restate the question.`),
 
+  // Beginner-friendly explainer — used by glossary tap + "I'm too new" button.
+  // Always fast tier so it never starves the bigger calls.
+  beginnerExplainer: (prompt: string, sport: string) => ask(prompt, 'fast'),
+
   // High-volume noisy calls → fast tier (cheaper, higher daily quota)
   playerAnalysis: (name: string, position: string, team: string, sport: string) =>
     ask(`Fantasy ${sport} analysis for ${name} (${position}, ${team}). Key strengths, risks, and current fantasy value.`, 'fast'),

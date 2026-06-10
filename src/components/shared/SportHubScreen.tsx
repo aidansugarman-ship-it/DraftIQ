@@ -241,7 +241,7 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
                 ))}
                 <TouchableOpacity
                   style={styles.fullTeamBtn}
-                  onPress={() => router.push('/roster')}
+                  onPress={() => router.push(`/roster?sport=${sport}` as any)}
                   activeOpacity={0.7}
                 >
                   <Text variant="bodySmallMedium" style={{ color: def.primaryColor }}>

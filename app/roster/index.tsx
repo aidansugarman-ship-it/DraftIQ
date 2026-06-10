@@ -22,6 +22,8 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useMyRoster, type RosterPlayer } from '@hooks/useMyRoster';
+import { useLocalSearchParams } from 'expo-router';
+import type { SportId } from '@constants/sports';
 import { gemini } from '@services/gemini';
 import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
@@ -34,8 +36,13 @@ import { useUserStore } from '@store/useUserStore';
 type Filter = 'all' | 'starters' | 'bench' | 'injured';
 
 export default function RosterScreen() {
-  const sport = useUserStore((s) => s.currentSport);
-  const { roster, loading, error, hasLeague } = useMyRoster();
+  // Respect ?sport= URL param so each sport tab gets its own roster reliably.
+  const params = useLocalSearchParams<{ sport?: string }>();
+  const urlSport = params.sport && ['nfl','nba','mlb','nhl'].includes(params.sport) ? params.sport as SportId : undefined;
+  const storeSport = useUserStore((s) => s.currentSport);
+  const sport: SportId = urlSport ?? storeSport;
+
+  const { roster, loading, error, hasLeague } = useMyRoster(sport);
   const [filter, setFilter] = useState<Filter>('all');
 
   const heroOp = useSharedValue(0);

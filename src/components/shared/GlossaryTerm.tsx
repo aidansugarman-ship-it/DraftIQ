@@ -60,9 +60,14 @@ export function GlossaryModalHost() {
     setLoading(true);
     const prompt = `In ${sportLabel} fantasy, explain the term "${term}" in plain English for a beginner. 2-3 sentences max. Give a quick concrete example. No extra jargon.`;
     let cancelled = false;
-    gemini.chat(prompt, sportLabel)
-      .then((res) => { if (cancelled) return; cache[key] = res; setText(res); })
-      .catch(() => { if (!cancelled) setText("Couldn't load that one — tap again in a sec."); })
+    gemini.beginnerExplainer(prompt, sportLabel)
+      .then((res) => {
+        if (cancelled) return;
+        const safe = res || "No explanation came back — tap again in a sec.";
+        cache[key] = safe;
+        setText(safe);
+      })
+      .catch((e) => { if (!cancelled) setText(`Couldn't load that one: ${e?.message ?? 'unknown error'}`); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [term, sport, sportLabel]);
