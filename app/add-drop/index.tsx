@@ -627,14 +627,15 @@ interface ScoutReport {
   verdict: string;
 }
 
-function YahooWaiverRow({ player, index, sportLabel, sport }: { player: YahooRosterPlayer; index: number; sportLabel: string; sport: SportId }) {
+function YahooWaiverRow({ player, index, sportLabel, sport, autoOpen }: { player: YahooRosterPlayer; index: number; sportLabel: string; sport: SportId; autoOpen?: boolean }) {
   const [report, setReport]   = useState<ScoutReport | null>(null);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen]       = useState(false);
+  const [open, setOpen]       = useState(!!autoOpen);
 
-  const handleAsk = useCallback(() => {
-    if (report) { setOpen(v => !v); return; }
-    setOpen(true);
+  // Build the scout report — extracted so we can auto-fire it for the top
+  // few rows on mount, not just on manual tap.
+  const fetchReport = useCallback(() => {
+    if (report || loading) return;
     setLoading(true);
     const prompt = `Quick scout report on ${player.name} (${player.position}, ${player.team}) for ${sportLabel} fantasy.
 
@@ -657,7 +658,22 @@ Output EXACT JSON, nothing else:
       })
       .catch(() => setReport({ bio: '', stats: '', verdict: 'Scout report unavailable right now — tap again in a sec.' }))
       .finally(() => setLoading(false));
-  }, [report, player, sportLabel]);
+  }, [report, loading, player, sportLabel]);
+
+  const handleAsk = useCallback(() => {
+    setOpen(v => {
+      const next = !v;
+      if (next) fetchReport();
+      return next;
+    });
+  }, [fetchReport]);
+
+  // Auto-fetch the scout report for the top players on mount so the
+  // user sees the bio/stats/verdict immediately without tapping.
+  useEffect(() => {
+    if (autoOpen) fetchReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const op = useSharedValue(0);
   const ty = useSharedValue(10);
@@ -765,9 +781,21 @@ function YahooWaiverSection({ sport }: { sport: SportId }) {
           No available players found in your league right now.
         </Text>
       ) : (
-        players.map((p, i) => (
-          <YahooWaiverRow key={p.playerKey} player={p} index={i} sport={sport} sportLabel={SPORTS[sport].shortLabel} />
-        ))
+        <>
+          <Text variant="caption" color={colors.textTertiary} style={{ marginBottom: spacing.sm, fontStyle: 'italic' }}>
+            Top 5 scout reports auto-load. Tap any other player for theirs.
+          </Text>
+          {players.map((p, i) => (
+            <YahooWaiverRow
+              key={p.playerKey}
+              player={p}
+              index={i}
+              sport={sport}
+              sportLabel={SPORTS[sport].shortLabel}
+              autoOpen={i < 5}
+            />
+          ))}
+        </>
       )}
     </View>
   );
