@@ -15,6 +15,7 @@ import { SPORTS } from '@constants/sports';
 import { useUserStore } from '@store/useUserStore';
 import { useMyRoster } from '@hooks/useMyRoster';
 import { useGmHistoryStore } from '@store/useGmHistoryStore';
+import { useAchievementsStore } from '@store/useAchievementsStore';
 import { gemini } from '@services/gemini';
 import { PageHeader } from '@components/shared/PageHeader';
 import { EmptyState } from '@components/shared/EmptyState';
@@ -91,6 +92,7 @@ Be honest and specific. Real evaluations, not flattery.`;
       if (roster) {
         cache[roster.leagueId] = { ts: Date.now(), report: rep };
         // Log a daily snapshot so the user can see their GM Score over time.
+        useAchievementsStore.getState().unlock('first_team_grade');
         useGmHistoryStore.getState().record({
           sport,
           leagueId: roster.leagueId,

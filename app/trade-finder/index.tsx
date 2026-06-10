@@ -95,6 +95,8 @@ TikTok creator voice. No fluff. Real player names only.`;
       const parsed = JSON.parse(match[0]) as TradeIdea[];
       const clean = parsed.filter(t => t.withTeam && t.youGive?.length && t.youGet?.length);
       cache[active.leagueKey] = { ts: Date.now(), ideas: clean };
+      // Unlock the achievement asynchronously — best-effort, don't break the flow.
+      try { require('@store/useAchievementsStore').useAchievementsStore.getState().unlock('first_trade_scan'); } catch {}
       setIdeas(clean);
     } catch {
       setError('Could not scan your league right now. Try again in a sec.');

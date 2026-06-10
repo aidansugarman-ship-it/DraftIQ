@@ -381,6 +381,11 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             contentContainerStyle={styles.pillScroll}
             style={{ marginBottom: spacing.lg }}
           >
+            <ChipPill icon="help-circle"    label="Am I Good?"  subtitle="Quick check"     accent={colors.green}  onPress={() => router.push('/am-i-good' as any)} />
+            <ChipPill icon="school"         label="Fantasy 101" subtitle="5-card course"   accent={colors.blue}   onPress={() => router.push('/fantasy-101' as any)} />
+            <ChipPill icon="trophy"         label="Badges"      subtitle="Your wins"       accent={colors.gold}   onPress={() => router.push('/achievements' as any)} />
+            <ChipPill icon="document-text"  label="Cheat Sheet" subtitle="Draft bible"     accent={colors.purple} onPress={() => router.push('/cheat-sheet' as any)} />
+            <ChipPill icon="reload-circle"  label="Week Recap"  subtitle="Win or loss"     accent={colors.coral}  onPress={() => router.push('/loss-recap' as any)} />
             <ChipPill icon="play-circle"    label="Spotlight"  subtitle="TikTok feed"     accent={colors.green}  onPress={() => router.push('/spotlight' as any)} />
             <ChipPill icon="flask"          label="What If"    subtitle="Swap sim"        accent={colors.blue}   onPress={() => router.push('/what-if' as any)} />
             <ChipPill icon="archive"        label="Vault"      subtitle="Saved mocks"     accent={colors.purple} onPress={() => router.push('/draft-vault' as any)} />

@@ -98,6 +98,12 @@ export const useYahooStore = create<YahooState>((set, get) => ({
       });
       set({ active: next });
       persist(next);
+      // Unlock plug-in achievements based on what got connected.
+      try {
+        const ach = require('@store/useAchievementsStore').useAchievementsStore.getState();
+        if (Object.keys(next).length > 0) ach.unlock('yahoo_connect');
+        if (Object.keys(next).length >= 2) ach.unlock('multi_sport');
+      } catch {}
     } catch {
       /* offline / token expired — leave state as-is */
     }

@@ -90,6 +90,7 @@ Real player names. Be honest about both sides.`;
       const m = raw.match(/\{[\s\S]*\}/);
       if (!m) throw new Error('no json');
       const parsed = JSON.parse(m[0]);
+      try { require('@store/useAchievementsStore').useAchievementsStore.getState().unlock('first_what_if'); } catch {}
       setResult({
         verdict:     parsed.verdict ?? '',
         scoreBefore: Math.max(0, Math.min(100, Number(parsed.scoreBefore) || 0)),

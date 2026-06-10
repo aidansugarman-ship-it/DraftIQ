@@ -49,6 +49,7 @@ export default function CustomAlertsScreen() {
       setPermNote('');
     }
     add({ player: name.trim(), sport, condition: cond });
+    try { require('@store/useAchievementsStore').useAchievementsStore.getState().unlock('first_alert'); } catch {}
     setName('');
   }
 

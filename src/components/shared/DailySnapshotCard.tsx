@@ -12,10 +12,16 @@ import { espn } from '@services/espn';
 import { gemini } from '@services/gemini';
 import { useRefreshSignal } from '@store/useRefreshSignal';
 
+interface Action {
+  rank:    number;
+  title:   string;
+  detail:  string;
+  urgency: 'urgent' | 'today' | 'chill';
+}
 interface Snapshot {
   generatedAt: number;
-  bullets:     string[];
   headline:    string;
+  actions:     Action[];
 }
 
 const memCache: Record<string, Snapshot> = {};
@@ -47,17 +53,21 @@ export function DailySnapshotCard({ sport }: { sport: SportId }) {
         .map(p => `${p.name} (${p.position}, ${p.team}${p.injury ? `, ${p.injury.status}` : ''})`)
         .join(', ');
 
-      const prompt = `Daily snapshot for a ${sportDef.shortLabel} fantasy manager. ${roster.teamName} starters: ${rosterStr}.
+      const prompt = `Daily action card for a ${sportDef.shortLabel} fantasy manager. ${roster.teamName} starters: ${rosterStr}.
 
 Recent ${sportDef.shortLabel} headlines (since yesterday-ish):
 ${newsStr}
 
-Output EXACT JSON, nothing else:
+Output 3 RANKED ACTIONS — the most impactful things this user should do TODAY. EXACT JSON, nothing else:
 {
-  "headline": "ONE punchy sentence — what's the biggest thing this manager needs to know",
-  "bullets": ["1 sentence — specific change that affects their team", "...up to 4 bullets"]
+  "headline": "ONE punchy headline — TikTok creator voice, what's the day about",
+  "actions": [
+    {"rank": 1, "title": "imperative — 'Drop X for Y' or 'Set lineup before 1pm' style", "detail": "1 sentence why, specific to their roster", "urgency": "urgent" | "today" | "chill"},
+    {"rank": 2, "title": "...", "detail": "...", "urgency": "..."},
+    {"rank": 3, "title": "...", "detail": "...", "urgency": "..."}
+  ]
 }
-Reference players by name. TikTok creator voice. No fluff. If nothing big changed, say so honestly.`;
+Real player names. No fluff. If they're set, the 3rd action can be "Watch [game] — your X is hot" or similar low-priority chill action.`;
 
       const raw = await gemini.chat(prompt, sportDef.shortLabel);
       const match = raw.match(/\{[\s\S]*\}/);
@@ -66,7 +76,12 @@ Reference players by name. TikTok creator voice. No fluff. If nothing big change
       const s: Snapshot = {
         generatedAt: Date.now(),
         headline:    parsed.headline ?? '',
-        bullets:     Array.isArray(parsed.bullets) ? parsed.bullets.slice(0, 4) : [],
+        actions:     Array.isArray(parsed.actions) ? parsed.actions.slice(0, 3).map((a: any, i: number) => ({
+          rank:    Number(a.rank) || i + 1,
+          title:   a.title  ?? '',
+          detail:  a.detail ?? '',
+          urgency: ['urgent','today','chill'].includes(a.urgency) ? a.urgency : 'today',
+        })) : [],
       };
       memCache[cacheKey] = s;
       AsyncStorage.setItem(STORAGE_PREFIX + cacheKey, JSON.stringify(s)).catch(() => {});
@@ -121,7 +136,7 @@ Reference players by name. TikTok creator voice. No fluff. If nothing big change
   return (
     <View style={styles.wrap}>
       <View style={styles.headRow}>
-        <Sticker variant="must" label="WHAT'S NEW" />
+        <Sticker variant="must" label="DO TODAY" />
         <Text variant="caption" color={colors.textTertiary} style={{ flex: 1, textAlign: 'right' }}>
           {new Date(snap.generatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
         </Text>
@@ -131,14 +146,26 @@ Reference players by name. TikTok creator voice. No fluff. If nothing big change
           {snap.headline}
         </Text>
       )}
-      {snap.bullets.map((b, i) => (
-        <View key={i} style={styles.bullet}>
-          <Ionicons name="chevron-forward" size={11} color={colors.green} />
-          <Text variant="bodySmall" color={colors.textSecondary} style={{ flex: 1, lineHeight: 19 }}>
-            {b}
-          </Text>
-        </View>
-      ))}
+      {snap.actions.map((a) => {
+        const tone = a.urgency === 'urgent' ? colors.coral : a.urgency === 'today' ? colors.gold : colors.green;
+        return (
+          <View key={a.rank} style={[styles.action, { borderLeftColor: tone }]}>
+            <View style={[styles.actionRank, { backgroundColor: `${tone}22`, borderColor: `${tone}88` }]}>
+              <Text style={[styles.actionRankNum, { color: tone }]}>{a.rank}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium" color={colors.textPrimary} style={{ fontWeight: '700', lineHeight: 21 }}>
+                {a.title}
+              </Text>
+              {!!a.detail && (
+                <Text variant="caption" color={colors.textTertiary} style={{ marginTop: 2, lineHeight: 17 }}>
+                  {a.detail}
+                </Text>
+              )}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -176,5 +203,25 @@ const styles = StyleSheet.create({
     alignItems:    'flex-start',
     gap:           spacing.xs,
     marginTop:     4,
+  },
+  action: {
+    flexDirection: 'row',
+    gap:           spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingLeft:   spacing.sm,
+    borderLeftWidth: 3,
+    marginTop:     6,
+  },
+  actionRank: {
+    width:           28,
+    height:          28,
+    borderRadius:    14,
+    borderWidth:     1.5,
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  actionRankNum: {
+    fontSize:   14,
+    fontWeight: '800',
   },
 });

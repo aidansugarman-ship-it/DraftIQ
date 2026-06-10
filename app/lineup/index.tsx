@@ -24,6 +24,8 @@ import { SportTint } from '@components/shared/SportTint';
 import { LineupAlertsCard } from '@components/shared/LineupAlertsCard';
 import { TabSwitcher } from '@components/shared/TabSwitcher';
 import { ROSTER_TABS } from '@components/shared/hubTabs';
+import { useAchievementsStore } from '@store/useAchievementsStore';
+import { useLineupHistoryStore } from '@store/useLineupHistoryStore';
 
 interface LineupCall {
   name:       string;
@@ -47,8 +49,12 @@ export default function LineupOptimizerScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
+  const unlock          = useAchievementsStore(s => s.unlock);
+  const recordHistory   = useLineupHistoryStore(s => s.record);
+
   const optimize = useCallback(async () => {
     if (!roster) return;
+    unlock('first_optimize');
     setLoading(true);
     setError(null);
     try {
@@ -81,16 +87,23 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
       const match = raw.match(/\{[\s\S]*\}/);
       if (!match) throw new Error('no json');
       const parsed = JSON.parse(match[0]);
-      setResult({
-        calls:   Array.isArray(parsed.calls) ? parsed.calls : [],
-        summary: parsed.summary ?? '',
-      });
+      const calls = Array.isArray(parsed.calls) ? parsed.calls : [];
+      setResult({ calls, summary: parsed.summary ?? '' });
+      // Log this run so the AI can spot lineup-decision patterns later
+      if (roster) {
+        recordHistory({
+          sport,
+          leagueId: roster.leagueId,
+          changedCount: calls.filter((c: any) => c.changed).length,
+          decisions: calls.map((c: any) => ({ name: c.name, slot: c.slot, injury: undefined })),
+        });
+      }
     } catch {
       setError('Could not optimize right now. Try again in a sec.');
     } finally {
       setLoading(false);
     }
-  }, [roster, sportDef.shortLabel]);
+  }, [roster, sportDef.shortLabel, unlock, recordHistory, sport]);
 
   // Auto-run once the roster is ready.
   useEffect(() => {

@@ -16,6 +16,8 @@ import { useDraftVaultStore } from '@store/useDraftVaultStore';
 import { useAlertsStore } from '@store/useAlertsStore';
 import { useFirstRunStore } from '@store/useFirstRunStore';
 import { useGlossaryStore } from '@store/useGlossaryStore';
+import { useAchievementsStore } from '@store/useAchievementsStore';
+import { useLineupHistoryStore } from '@store/useLineupHistoryStore';
 import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
@@ -117,6 +119,8 @@ export default function RootLayout() {
     useDraftVaultStore.getState().hydrate();
     useFirstRunStore.getState().hydrate();
     useGlossaryStore.getState().hydrate();
+    useAchievementsStore.getState().hydrate();
+    useLineupHistoryStore.getState().hydrate();
     useAlertsStore.getState().hydrate().then(() => {
       // After alerts hydrate, the scanner can check them too
       scanWatchlistForNews();

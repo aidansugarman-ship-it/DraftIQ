@@ -40,7 +40,11 @@ export default function TradeBlockScreen() {
   const active   = useYahooStore(s => s.active[sport]);
   const { roster } = useMyRoster(sport);
   const block    = useTradeBlockStore(s => s.list).filter(p => p.sport === sport);
-  const toggle   = useTradeBlockStore(s => s.toggle);
+  const rawToggle = useTradeBlockStore(s => s.toggle);
+  const toggle   = (player: Parameters<typeof rawToggle>[0]) => {
+    try { require('@store/useAchievementsStore').useAchievementsStore.getState().unlock('first_block'); } catch {}
+    rawToggle(player);
+  };
   const hydrated = useTradeBlockStore(s => s.hydrated);
 
   const [pitches, setPitches] = useState<Record<string, Pitch[]>>({});
