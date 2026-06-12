@@ -65,9 +65,9 @@ export default function TabsLayout() {
         options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="🏒" focused={focused} /> }}
       />
 
-      {/* Hidden from tab bar but routes still work */}
+      {/* Hidden from tab bar but routes still work. Draft lives at
+          app/draft/index.tsx (outside this group) — no tab entry needed. */}
       <Tabs.Screen name="board"   options={{ href: null }} />
-      <Tabs.Screen name="draft"   options={{ href: null }} />
       <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
