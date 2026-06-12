@@ -41,6 +41,52 @@ function teamOnClock(overall: number, teams: number): number {
   return round % 2 === 0 ? idxInRound : teams - 1 - idxInRound;
 }
 
+/**
+ * Robustly parse a big-board JSON array. If the response truncated mid-array
+ * (common on a 120-player list), JSON.parse on the whole thing fails — so we
+ * fall back to extracting each {...} object individually and salvage as many
+ * valid prospects as we can.
+ */
+function parseBoard(raw: string): Prospect[] {
+  const norm = (p: any, i: number): Prospect | null =>
+    p && p.name && p.pos
+      ? { name: String(p.name), pos: String(p.pos).toUpperCase(), team: p.team ? String(p.team) : '', rank: Number(p.rank) || i + 1 }
+      : null;
+
+  // Try the whole array first.
+  const arr = raw.match(/\[[\s\S]*\]/);
+  if (arr) {
+    try {
+      const parsed = JSON.parse(arr[0]) as any[];
+      const clean = parsed.map(norm).filter((x): x is Prospect => !!x);
+      if (clean.length) return dedupe(clean);
+    } catch { /* fall through to salvage */ }
+  }
+
+  // Salvage: pull each object literal out and parse individually.
+  const salvaged: Prospect[] = [];
+  const objs = raw.match(/\{[^{}]*\}/g) ?? [];
+  objs.forEach((o, i) => {
+    try {
+      const got = norm(JSON.parse(o), i);
+      if (got) salvaged.push(got);
+    } catch { /* skip bad object */ }
+  });
+  return dedupe(salvaged);
+}
+
+function dedupe(list: Prospect[]): Prospect[] {
+  const seen = new Set<string>();
+  const out: Prospect[] = [];
+  for (const p of list) {
+    const key = p.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out.sort((a, b) => a.rank - b.rank);
+}
+
 export default function DraftRoomScreen() {
   const sport     = useUserStore(s => s.currentSport);
   const sportDef  = SPORTS[sport];
@@ -82,12 +128,7 @@ export default function DraftRoomScreen() {
 [{"name": "player name", "pos": "position abbrev", "team": "team abbrev", "rank": 1}, ...]
 Real current players in true ranking order. Mix positions realistically. No duplicates.`;
       const raw = await gemini.chat(prompt, sportDef.shortLabel);
-      const m = raw.match(/\[[\s\S]*\]/);
-      if (!m) throw new Error('no json');
-      const parsed = JSON.parse(m[0]) as Prospect[];
-      const clean = parsed
-        .filter(p => p.name && p.pos)
-        .map((p, i) => ({ name: p.name, pos: String(p.pos).toUpperCase(), team: p.team ?? '', rank: p.rank ?? i + 1 }));
+      const clean = parseBoard(raw);
       if (clean.length < totalPicks) throw new Error('board too small');
       setPool(clean);
       setPhase('live');
