@@ -22,6 +22,7 @@ import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
 import { LineupAlertsCard } from '@components/shared/LineupAlertsCard';
+import { LineupPatternsCard } from '@components/shared/LineupPatternsCard';
 import { TabSwitcher } from '@components/shared/TabSwitcher';
 import { ROSTER_TABS } from '@components/shared/hubTabs';
 import { useAchievementsStore } from '@store/useAchievementsStore';
@@ -213,6 +214,9 @@ Include EVERY player from the roster in "calls". "changed" is true if your call 
 
               {/* Lineup Lock Alerts — injured starters + daily reminder */}
               <LineupAlertsCard roster={roster} />
+
+              {/* Pattern analysis from logged optimize runs */}
+              {roster && <LineupPatternsCard leagueId={roster.leagueId} sport={sport} />}
 
               <TouchableOpacity style={styles.rerun} onPress={optimize} activeOpacity={0.8}>
                 <Ionicons name="refresh" size={15} color={colors.textSecondary} />

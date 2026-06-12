@@ -11,6 +11,7 @@ import { spacing, radius } from '@constants/spacing';
 import { usePowerRankings, computeMovers, type RankedTeam } from '@hooks/usePowerRankings';
 import { Sticker } from '@components/shared/Sticker';
 import { SportTint } from '@components/shared/SportTint';
+import { ExplainThisFAB } from '@components/shared/ExplainThisFAB';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { EmptyState } from '@components/shared/EmptyState';
 import { SkeletonRow } from '@components/shared/Skeleton';
@@ -69,6 +70,10 @@ export default function PowerRankings() {
           <View style={{ height: 80 }} />
         </ScrollView>
       </SafeAreaView>
+      <ExplainThisFAB
+        screenName="Power Rankings"
+        context="An AI ranking of every team in your league from best to worst, based on records, points, and roster strength. Tap a team to see their star players. The MOVEMENT section shows who jumped or dropped since last time and why."
+      />
     </View>
   );
 }

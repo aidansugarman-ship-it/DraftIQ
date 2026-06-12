@@ -23,6 +23,7 @@ import { SkeletonRow } from '@components/shared/Skeleton';
 import { SportTint } from '@components/shared/SportTint';
 import { TabSwitcher } from '@components/shared/TabSwitcher';
 import { TRADE_TABS } from '@components/shared/hubTabs';
+import { ExplainThisFAB } from '@components/shared/ExplainThisFAB';
 
 interface TradeIdea {
   withTeam: string;
@@ -200,6 +201,10 @@ TikTok creator voice. No fluff. Real player names only.`;
           <View style={{ height: 90 }} />
         </ScrollView>
       </SafeAreaView>
+      <ExplainThisFAB
+        screenName="Trade Finder"
+        context="Scans every team in your league and proposes realistic trades that would improve YOUR roster. Each idea shows what you'd give, what you'd get, why it helps you, and a ready-to-send pitch message for the other manager."
+      />
     </View>
   );
 }
