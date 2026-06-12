@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@components/ui/Text';
 import { Sticker } from '@components/shared/Sticker';
 import { JargonText } from '@components/shared/JargonText';
+import { ShareTakeButton } from '@components/shared/ShareTakeButton';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { SPORTS, type SportId } from '@constants/sports';
@@ -107,7 +108,10 @@ Real, current players from the headlines or known stars. No fluff.`;
         <>
           {/* Headline take */}
           <View style={styles.takeBox}>
-            <Sticker variant="fire" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Sticker variant="fire" />
+              <ShareTakeButton headline={pulse.headline} sport={sportDef.shortLabel} compact />
+            </View>
             <JargonText variant="bodyLarge" color={colors.textPrimary} style={styles.takeText}>
               {`"${pulse.headline}"`}
             </JargonText>

@@ -42,7 +42,36 @@ function userContextLine(): string {
     parts.push('Team philosophy: BALANCED. They want sustained competitiveness — recommend moves that mix safety with upside.');
   }
 
+  // Personalization memory — fold in the user's recent take history so the AI
+  // "remembers" players it has flagged before and can build a through-line
+  // ("last week I told you X was heating up — he popped off"). Compounds value
+  // over a season. Kept short so it doesn't blow the token budget.
+  try {
+    // Lazy require to avoid a circular import at module load.
+    const { useTakesLog } = require('@store/useTakesLog');
+    const takes = useTakesLog.getState().takes as Array<{ ts: number; player: string; kind: string; take: string }>;
+    if (takes && takes.length > 0) {
+      const recent = takes.slice(0, 8)
+        .map(t => `- ${t.player}: "${t.take}" (flagged ${kindLabel(t.kind)})`)
+        .join('\n');
+      parts.push(`MEMORY — takes you've recently given this user (reference them when relevant for continuity, e.g. "like I called last week"):\n${recent}`);
+    }
+  } catch { /* store not ready — skip memory this call */ }
+
   return parts.join('\n\n');
+}
+
+function kindLabel(kind: string): string {
+  switch (kind) {
+    case 'hot':     return 'as heating up';
+    case 'cold':    return 'as cooling off';
+    case 'add':     return 'as an add';
+    case 'drop':    return 'as a drop';
+    case 'start':   return 'as a start';
+    case 'sit':     return 'as a sit';
+    case 'trade':   return 'in a trade';
+    default:        return 'recently';
+  }
 }
 
 const SYSTEM_PROMPT = `You are DraftIQ — the AI fantasy advisor inside the app. Think of yourself as that friend on TikTok who gives sharp fantasy takes that turn out to be RIGHT. Not a corporate analyst. Not a hedging journalist. A confident, opinionated fantasy mind that fantasy players actually want to listen to.

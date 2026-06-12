@@ -60,6 +60,70 @@ export async function disableLineupReminders(): Promise<void> {
 }
 
 /**
+ * The full daily retention loop. Schedules:
+ *   - 10:00am "3 things to do today" (the morning hook)
+ *   - 11:30am Sunday "lineup not set?" nag (game-day safety)
+ *   - 8:00pm "keep your streak alive" nudge
+ * All repeating + idempotent (clears prior schedule first).
+ * `streak` is woven into the evening nudge for stakes.
+ */
+export async function scheduleDailyLoop(streak: number): Promise<boolean> {
+  if (!Notifications) return false;
+  try {
+    const perm = await Notifications.getPermissionsAsync();
+    let granted = perm.status === 'granted';
+    if (!granted) {
+      const req = await Notifications.requestPermissionsAsync();
+      granted = req.status === 'granted';
+    }
+    if (!granted) return false;
+
+    await Notifications.cancelAllScheduledNotificationsAsync();
+
+    // Morning hook — the reason to open every day.
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '☀️ Your 3 moves today',
+        body:  "DraftIQ lined up exactly what to do with your team. Tap in.",
+      },
+      trigger: { hour: 10, minute: 0, repeats: true },
+    });
+
+    // Evening streak nudge — stakes.
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: streak > 1 ? `🔥 Don't break your ${streak}-day streak` : '🔥 Build your streak',
+        body:  "10 seconds in the app keeps it alive. Your team misses you.",
+      },
+      trigger: { hour: 20, minute: 0, repeats: true },
+    });
+
+    // Sunday late-morning lineup safety net.
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '🚨 Lineup lock soon',
+        body:  "Games are coming. Make sure no injured guys are still starting.",
+      },
+      trigger: { weekday: 1, hour: 11, minute: 30, repeats: true }, // 1 = Sunday
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Turn off the whole daily loop. */
+export async function disableDailyLoop(): Promise<void> {
+  if (!Notifications) return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {
+    /* no-op */
+  }
+}
+
+/**
  * Fire-and-forget local notification, used for breaking-news pings on
  * watchlisted players. Silently no-ops if permission isn't granted yet.
  */

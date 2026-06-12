@@ -18,6 +18,8 @@ import { useFirstRunStore } from '@store/useFirstRunStore';
 import { useGlossaryStore } from '@store/useGlossaryStore';
 import { useAchievementsStore } from '@store/useAchievementsStore';
 import { useLineupHistoryStore } from '@store/useLineupHistoryStore';
+import { useDailyStreakStore } from '@store/useDailyStreakStore';
+import { scheduleDailyLoop } from '@services/notifications';
 import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
@@ -121,6 +123,18 @@ export default function RootLayout() {
     useGlossaryStore.getState().hydrate();
     useAchievementsStore.getState().hydrate();
     useLineupHistoryStore.getState().hydrate();
+    // Daily-open streak: hydrate, check in for today, reschedule the push
+    // loop with the fresh streak count, and unlock streak achievements.
+    useDailyStreakStore.getState().hydrate().then(() => {
+      const streak = useDailyStreakStore.getState();
+      streak.checkIn();
+      const days = useDailyStreakStore.getState().current;
+      const ach = useAchievementsStore.getState();
+      if (days >= 3) ach.unlock('streak_3');
+      if (days >= 7) ach.unlock('streak_7');
+      // Re-arm the daily notification loop with the live streak (best-effort).
+      scheduleDailyLoop(days).catch(() => {});
+    });
     useAlertsStore.getState().hydrate().then(() => {
       // After alerts hydrate, the scanner can check them too
       scanWatchlistForNews();

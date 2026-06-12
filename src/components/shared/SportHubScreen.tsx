@@ -41,6 +41,7 @@ import { SectionGroup } from '@components/shared/SectionGroup';
 import { HubTutorialOverlay } from '@components/shared/HubTutorialOverlay';
 import { ExplainThisFAB } from '@components/shared/ExplainThisFAB';
 import { useFirstRunStore } from '@store/useFirstRunStore';
+import { useDailyStreakStore } from '@store/useDailyStreakStore';
 
 /**
  * One screen, used by all four sport tabs (nfl/nba/mlb/nhl).
@@ -170,6 +171,7 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             <Text variant="body" color={colors.textSecondary} style={styles.subtitle}>
               {def.label} · {def.season.label}
             </Text>
+            <StreakBadge />
           </Animated.View>
 
           {/* Stock ticker — scrolling marquee of live headlines */}
@@ -465,6 +467,26 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
+function StreakBadge() {
+  const current = useDailyStreakStore(s => s.current);
+  const best    = useDailyStreakStore(s => s.best);
+  if (current < 1) return null;
+  return (
+    <TouchableOpacity
+      style={streakStyles.wrap}
+      onPress={() => router.push('/achievements' as any)}
+      activeOpacity={0.8}
+    >
+      <Text style={{ fontSize: 14 }}>🔥</Text>
+      <Text style={streakStyles.count}>{current}</Text>
+      <Text style={streakStyles.label}>DAY{current === 1 ? '' : 'S'}</Text>
+      {best > current && (
+        <Text style={streakStyles.best}>· best {best}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 function SettingsTopBar() {
   const settingsOpened     = useFirstRunStore(s => s.settingsOpened);
   const markSettingsOpened = useFirstRunStore(s => s.markSettingsOpened);
@@ -716,6 +738,24 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   newsBullet: { fontSize: 18, lineHeight: 24, marginTop: 1 },
+});
+
+const streakStyles = StyleSheet.create({
+  wrap: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               4,
+    paddingHorizontal: spacing.md,
+    paddingVertical:   6,
+    borderRadius:      999,
+    backgroundColor:   `${colors.coral}18`,
+    borderWidth:       1,
+    borderColor:       `${colors.coral}55`,
+    marginTop:         spacing.sm,
+  },
+  count: { fontSize: 15, fontWeight: '900', color: colors.coral, letterSpacing: -0.3 },
+  label: { fontSize: 10, fontWeight: '800', color: colors.coral, letterSpacing: 0.8 },
+  best:  { fontSize: 10, fontWeight: '600', color: colors.textTertiary, marginLeft: 2 },
 });
 
 const pillStyles = StyleSheet.create({
