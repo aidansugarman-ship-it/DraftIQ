@@ -167,9 +167,9 @@ export default function WelcomeScreen() {
           {/* ── CTAs ──────────────────────────────────────────────────────── */}
           <Animated.View style={[styles.ctaSection, ctaStyle]}>
             <Button
-              label="Get Started Free"
+              label="See a Take — No Signup"
               variant="primary"
-              onPress={() => router.push('/(auth)/signup')}
+              onPress={() => router.push('/(auth)/quick-start' as any)}
             />
             <View style={styles.ctaGap} />
             <Button
