@@ -174,6 +174,9 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             <StreakBadge />
           </Animated.View>
 
+          {/* Top toolbar — the tools, front and center (no more buried menu) */}
+          <TopToolbar sport={sport} primaryColor={def.primaryColor} injuryCount={injuryCount} />
+
           {/* Stock ticker — scrolling marquee of live headlines */}
           <NewsTicker sport={sport} />
 
@@ -395,8 +398,6 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             <ChipPill icon="flask"          label="What If"    subtitle="Swap sim"        accent={colors.blue}   onPress={() => router.push('/what-if' as any)} />
             <ChipPill icon="archive"        label="Vault"      subtitle="Saved mocks"     accent={colors.purple} onPress={() => router.push('/draft-vault' as any)} />
             <ChipPill icon="notifications"  label="Alerts"     subtitle="Custom pings"    accent={colors.gold}   onPress={() => router.push('/alerts' as any)} />
-            <ChipPill icon="flash"          label="Mock Draft" subtitle="Pre-draft prep"  accent={colors.textTertiary} onPress={() => router.push('/draft')} />
-            <ChipPill icon="swap-vertical"  label="Add / Drop" subtitle="Waiver wire"     accent={colors.coral}  onPress={() => router.push('/add-drop')} />
             <ChipPill
               icon="medkit"
               label={injuryCount != null ? `Injuries · ${injuryCount}` : 'Injuries'}
@@ -404,7 +405,6 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
               accent={colors.coral}
               onPress={() => router.push('/injuries')}
             />
-            <ChipPill icon="git-compare" label="Trade" subtitle="Builder" accent={colors.purple} onPress={() => router.push('/trade')} />
           </ScrollView>
           </SectionGroup>
 
@@ -466,6 +466,39 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function TopToolbar({ sport, primaryColor, injuryCount }: { sport: SportId; primaryColor: string; injuryCount: number | null }) {
+  const TOOLS: Array<{ icon: IoniconName; label: string; route: string; accent: string }> = [
+    { icon: 'flash',         label: 'Lineup',    route: '/lineup',        accent: colors.green },
+    { icon: 'git-compare',   label: 'Trade',     route: '/trade',         accent: colors.purple },
+    { icon: 'swap-vertical', label: 'Add/Drop',  route: '/add-drop',      accent: colors.coral },
+    { icon: 'document-text', label: 'Mock Draft', route: '/draft',        accent: colors.gold },
+    { icon: 'search',        label: 'Trade Find', route: '/trade-finder', accent: colors.purple },
+    { icon: 'trophy',        label: 'Rankings',  route: '/power-rankings', accent: colors.gold },
+    { icon: 'clipboard',     label: 'Report',    route: '/team-report',   accent: colors.blue },
+  ];
+  return (
+    <View style={toolbarStyles.wrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={toolbarStyles.row}>
+        {TOOLS.map((t) => (
+          <TouchableOpacity
+            key={t.route}
+            style={toolbarStyles.tool}
+            onPress={() => router.push(t.route as any)}
+            activeOpacity={0.75}
+          >
+            <View style={[toolbarStyles.iconBubble, { backgroundColor: `${t.accent}1E`, borderColor: `${t.accent}55` }]}>
+              <Ionicons name={t.icon} size={20} color={t.accent} />
+            </View>
+            <Text variant="caption" color={colors.textSecondary} style={{ fontWeight: '600', fontSize: 11 }} numberOfLines={1}>
+              {t.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
 
 function StreakBadge() {
   const current = useDailyStreakStore(s => s.current);
@@ -738,6 +771,31 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   newsBullet: { fontSize: 18, lineHeight: 24, marginTop: 1 },
+});
+
+const toolbarStyles = StyleSheet.create({
+  wrap: {
+    marginHorizontal: -spacing.base,  // bleed to screen edges
+    marginBottom:     spacing.lg,
+    marginTop:        spacing.xs,
+  },
+  row: {
+    paddingHorizontal: spacing.base,
+    gap:               spacing.md,
+  },
+  tool: {
+    alignItems: 'center',
+    gap:        6,
+    width:      64,
+  },
+  iconBubble: {
+    width:          52,
+    height:         52,
+    borderRadius:   18,
+    borderWidth:    1.5,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
 });
 
 const streakStyles = StyleSheet.create({

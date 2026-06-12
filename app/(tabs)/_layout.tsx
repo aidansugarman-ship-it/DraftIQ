@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform, Text as RNText } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { colors } from '@constants/colors';
 
@@ -7,6 +8,18 @@ function EmojiTab({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
     <View style={[tabStyles.wrap, focused && tabStyles.wrapActive]}>
       <RNText style={[tabStyles.emoji, !focused && { opacity: 0.55 }]}>{emoji}</RNText>
+    </View>
+  );
+}
+
+function HomeIconTab({ focused }: { focused: boolean }) {
+  return (
+    <View style={[tabStyles.wrap, focused && tabStyles.wrapActive]}>
+      <Ionicons
+        name={focused ? 'home' : 'home-outline'}
+        size={22}
+        color={focused ? colors.green : colors.textTertiary}
+      />
     </View>
   );
 }
@@ -30,8 +43,11 @@ export default function TabsLayout() {
           ),
       }}
     >
-      {/* No home screen — index just redirects to the primary sport. */}
-      <Tabs.Screen name="index" options={{ href: null }} />
+      {/* Global Home tab — cross-sport landing. */}
+      <Tabs.Screen
+        name="index"
+        options={{ tabBarIcon: ({ focused }) => <HomeIconTab focused={focused} /> }}
+      />
       <Tabs.Screen
         name="nfl"
         options={{ tabBarIcon: ({ focused }) => <EmojiTab emoji="🏈" focused={focused} /> }}
