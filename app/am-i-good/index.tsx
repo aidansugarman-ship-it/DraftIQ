@@ -18,6 +18,7 @@ import { useMyRoster } from '@hooks/useMyRoster';
 import { gemini } from '@services/gemini';
 import { espn } from '@services/espn';
 import { useAchievementsStore } from '@store/useAchievementsStore';
+import { ShareableCard } from '@components/shared/ShareableCard';
 
 type Status = 'good' | 'mid' | 'bad';
 interface Result {
@@ -131,6 +132,9 @@ Casual-friendly voice. The owner is checking if they need to do something or can
                 <Text variant="body" color={colors.textSecondary} style={styles.resultWhy}>
                   {result.why}
                 </Text>
+                <View style={{ marginTop: spacing.md }}>
+                  <ShareableCard headline={result.headline} detail={result.why} sport={sport} />
+                </View>
               </Animated.View>
 
               <TouchableOpacity style={styles.recheck} onPress={() => { setResult(null); ask(); }} activeOpacity={0.8}>

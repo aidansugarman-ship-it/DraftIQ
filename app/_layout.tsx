@@ -20,6 +20,7 @@ import { useAchievementsStore } from '@store/useAchievementsStore';
 import { useLineupHistoryStore } from '@store/useLineupHistoryStore';
 import { useDailyStreakStore } from '@store/useDailyStreakStore';
 import { scheduleDailyLoop } from '@services/notifications';
+import { getMorningBriefBody } from '@services/morningBrief';
 import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
@@ -125,15 +126,26 @@ export default function RootLayout() {
     useLineupHistoryStore.getState().hydrate();
     // Daily-open streak: hydrate, check in for today, reschedule the push
     // loop with the fresh streak count, and unlock streak achievements.
-    useDailyStreakStore.getState().hydrate().then(() => {
+    useDailyStreakStore.getState().hydrate().then(async () => {
       const streak = useDailyStreakStore.getState();
       streak.checkIn();
       const days = useDailyStreakStore.getState().current;
       const ach = useAchievementsStore.getState();
-      if (days >= 3) ach.unlock('streak_3');
-      if (days >= 7) ach.unlock('streak_7');
-      // Re-arm the daily notification loop with the live streak (best-effort).
-      scheduleDailyLoop(days).catch(() => {});
+      if (days >= 3)   ach.unlock('streak_3');
+      if (days >= 7)   ach.unlock('streak_7');
+      if (days >= 14)  ach.unlock('streak_14');
+      if (days >= 30)  ach.unlock('streak_30');
+      if (days >= 100) ach.unlock('streak_100');
+      // Build today's REAL "3 moves" line (daily-cached) and bake it into the
+      // 10am push so the notification body is useful, not generic. Best-effort.
+      try {
+        const u = useUserStore.getState().user;
+        const primary = u?.primarySport ?? 'nfl';
+        const body = await getMorningBriefBody(primary, '');
+        scheduleDailyLoop(days, body).catch(() => {});
+      } catch {
+        scheduleDailyLoop(days).catch(() => {});
+      }
     });
     useAlertsStore.getState().hydrate().then(() => {
       // After alerts hydrate, the scanner can check them too

@@ -5,6 +5,7 @@ import { Text } from '@components/ui/Text';
 import { Sticker } from '@components/shared/Sticker';
 import { JargonText } from '@components/shared/JargonText';
 import { ShareTakeButton } from '@components/shared/ShareTakeButton';
+import { ShareableCard } from '@components/shared/ShareableCard';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { SPORTS, type SportId } from '@constants/sports';
@@ -12,6 +13,7 @@ import { gemini } from '@services/gemini';
 import { espn } from '@services/espn';
 import { useRefreshSignal } from '@store/useRefreshSignal';
 import { useTakesLog } from '@store/useTakesLog';
+import { useStreakStore } from '@store/useStreakStore';
 
 interface Pulse {
   headline: string;
@@ -62,6 +64,12 @@ Real, current players from the headlines or known stars. No fluff.`;
       const log = useTakesLog.getState().log;
       p.hot.forEach(h => log({ sport, kind: 'hot',  player: h.name, take: h.note }));
       p.cold.forEach(c => log({ sport, kind: 'cold', player: c.name, take: c.note }));
+      // Record the bold takes as gradeable calls so the track record / hit-rate
+      // / GM-score pipeline actually has data to resolve later. Deduped by the
+      // store-side key on player+headline within a session via the cache guard.
+      const rec = useStreakStore.getState().record;
+      if (p.headline) rec({ sport, kind: 'bold', headline: p.headline });
+      p.hot.forEach(h => rec({ sport, kind: 'sleeper', headline: `${h.name} heating up: ${h.note}`, player: h.name }));
       setPulse(p);
     } catch {
       /* swallow — keep last state */
@@ -115,6 +123,9 @@ Real, current players from the headlines or known stars. No fluff.`;
             <JargonText variant="bodyLarge" color={colors.textPrimary} style={styles.takeText}>
               {`"${pulse.headline}"`}
             </JargonText>
+            <View style={{ marginTop: spacing.sm }}>
+              <ShareableCard headline={pulse.headline} sport={sport} label="SHARE AS IMAGE" />
+            </View>
           </View>
 
           {/* Hot / Cold splits */}

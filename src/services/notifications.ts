@@ -67,7 +67,7 @@ export async function disableLineupReminders(): Promise<void> {
  * All repeating + idempotent (clears prior schedule first).
  * `streak` is woven into the evening nudge for stakes.
  */
-export async function scheduleDailyLoop(streak: number): Promise<boolean> {
+export async function scheduleDailyLoop(streak: number, morningBody?: string): Promise<boolean> {
   if (!Notifications) return false;
   try {
     const perm = await Notifications.getPermissionsAsync();
@@ -80,11 +80,14 @@ export async function scheduleDailyLoop(streak: number): Promise<boolean> {
 
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    // Morning hook — the reason to open every day.
+    // Morning hook — the reason to open every day. Body is the REAL "3 moves"
+    // generated on the last app open when available, else a generic nudge.
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '☀️ Your 3 moves today',
-        body:  "DraftIQ lined up exactly what to do with your team. Tap in.",
+        body:  morningBody && morningBody.trim()
+          ? morningBody.trim()
+          : "DraftIQ lined up exactly what to do with your team. Tap in.",
       },
       trigger: { hour: 10, minute: 0, repeats: true },
     });

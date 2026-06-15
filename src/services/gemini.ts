@@ -58,6 +58,31 @@ function userContextLine(): string {
     }
   } catch { /* store not ready — skip memory this call */ }
 
+  // Track record — fold in how the AI's resolved calls have actually played out
+  // so it can flex a hot streak ("I'm 8/10 on my last calls — trust me here")
+  // or stay humble when cold. This is the through-line that makes it feel like
+  // a real advisor who remembers being right (or wrong).
+  try {
+    const { useStreakStore } = require('@store/useStreakStore');
+    const calls = useStreakStore.getState().calls as Array<{ player?: string; headline: string; outcome?: 'hit' | 'miss' | null; ts: number }>;
+    const resolved = calls.filter(c => c.outcome === 'hit' || c.outcome === 'miss');
+    if (resolved.length >= 2) {
+      const hits = resolved.filter(c => c.outcome === 'hit').length;
+      const pct = Math.round((hits / resolved.length) * 100);
+      const lastHits = resolved.filter(c => c.outcome === 'hit').slice(0, 3)
+        .map(c => c.player || c.headline).filter(Boolean);
+      const lastMiss = resolved.filter(c => c.outcome === 'miss').slice(0, 2)
+        .map(c => c.player || c.headline).filter(Boolean);
+      let line = `TRACK RECORD — your resolved calls for this user are ${hits}/${resolved.length} (${pct}%).`;
+      if (lastHits.length) line += ` Recent WINS you nailed: ${lastHits.join(', ')}.`;
+      if (lastMiss.length) line += ` Recent MISSES (own them, don't hide): ${lastMiss.join(', ')}.`;
+      line += pct >= 60
+        ? ' You\'re hot — lean into the confidence ("I\'ve been right, trust this one").'
+        : ' You\'re cold lately — stay sharp and a touch humble, but still pick a side.';
+      parts.push(line);
+    }
+  } catch { /* store not ready — skip */ }
+
   return parts.join('\n\n');
 }
 

@@ -39,6 +39,15 @@ export const useStreakStore = create<StreakState>((set, get) => ({
   },
 
   record: (call) => {
+    // Skip an identical call (same kind + headline) logged in the last 20h so
+    // re-generating Pulse doesn't pile up duplicate gradeable calls.
+    const recentDup = get().calls.find(c =>
+      c.kind === call.kind &&
+      c.headline === call.headline &&
+      Date.now() - c.ts < 20 * 60 * 60 * 1000,
+    );
+    if (recentDup) return;
+
     const newCall: PastCall = {
       ...call,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

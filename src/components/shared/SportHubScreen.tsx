@@ -476,6 +476,7 @@ function TopToolbar({ sport, primaryColor, injuryCount }: { sport: SportId; prim
     { icon: 'search',        label: 'Trade Find', route: '/trade-finder', accent: colors.purple },
     { icon: 'trophy',        label: 'Rankings',  route: '/power-rankings', accent: colors.gold },
     { icon: 'clipboard',     label: 'Report',    route: '/team-report',   accent: colors.blue },
+    { icon: 'ribbon',        label: 'Track Rec', route: '/track-record',  accent: colors.green },
   ];
   return (
     <View style={toolbarStyles.wrap}>

@@ -14,6 +14,7 @@ import { SPORTS, type SportId } from '@constants/sports';
 import { useUserStore } from '@store/useUserStore';
 import { useYahooStore } from '@store/useYahooStore';
 import { useDailyStreakStore } from '@store/useDailyStreakStore';
+import { streakTier } from '@store/useAchievementsStore';
 import { gemini } from '@services/gemini';
 import { espn } from '@services/espn';
 
@@ -98,23 +99,27 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Streak strip */}
-          {streak >= 1 && (
-            <Animated.View entering={FadeIn.duration(400)} style={styles.streakStrip}>
-              <Text style={{ fontSize: 20 }}>🔥</Text>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyMedium" color={colors.textPrimary} style={{ fontWeight: '800' }}>
-                  {streak}-day streak
-                </Text>
-                <Text variant="caption" color={colors.textTertiary}>
-                  {best > streak ? `Best: ${best} days — go catch it.` : "You're on your best run. Keep it alive."}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => router.push('/achievements' as any)} hitSlop={8}>
-                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-              </TouchableOpacity>
-            </Animated.View>
-          )}
+          {/* Streak strip — with tier + progress to next "sicko" rank */}
+          {streak >= 1 && (() => {
+            const { tier, next, toNext } = streakTier(streak);
+            return (
+              <Animated.View entering={FadeIn.duration(400)} style={styles.streakStrip}>
+                <Text style={{ fontSize: 22 }}>{tier.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium" color={colors.textPrimary} style={{ fontWeight: '800' }}>
+                    {streak}-day streak · {tier.name}
+                  </Text>
+                  <Text variant="caption" color={colors.textTertiary}>
+                    {next ? `${toNext} day${toNext === 1 ? '' : 's'} to ${next.name} ${next.emoji}` : 'Max tier. Absolute legend.'}
+                    {best > streak ? ` · best ${best}` : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => router.push('/achievements' as any)} hitSlop={8}>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })()}
 
           {/* Pick your sport — fast launchers */}
           <Text style={styles.sectionLabel}>YOUR SPORTS</Text>

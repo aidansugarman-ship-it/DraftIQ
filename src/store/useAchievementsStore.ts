@@ -21,11 +21,39 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'first_alert',      title: 'Always Watching',   desc: 'Created your first custom news alert.',        emoji: '🔔' },
   { id: 'first_team_grade', title: 'Self-Aware GM',     desc: 'Pulled your first Team Report.',               emoji: '📋' },
   { id: 'first_am_i_good',  title: 'Vibes Check',       desc: 'Used the Am I Good? button.',                  emoji: '🤔' },
-  { id: 'streak_3',         title: 'Habit Forming',     desc: 'Opened DraftIQ 3 days in a row.',              emoji: '🔥' },
-  { id: 'streak_7',         title: 'True Sicko',        desc: 'Opened DraftIQ every day for a week.',         emoji: '🏆' },
+  { id: 'streak_3',         title: 'Getting Hooked',    desc: 'Opened DraftIQ 3 days in a row.',              emoji: '🔥' },
+  { id: 'streak_7',         title: 'Locked In',         desc: 'A full week straight.',                        emoji: '🔒' },
+  { id: 'streak_14',        title: 'Sicko',             desc: 'Two weeks without missing a day.',             emoji: '😤' },
+  { id: 'streak_30',        title: 'True Sicko',        desc: '30-day streak. You have a problem (good).',    emoji: '🏆' },
+  { id: 'streak_100',       title: 'Hall of Famer',     desc: '100 days. Genuinely unhinged. Respect.',       emoji: '👑' },
   { id: 'multi_sport',      title: 'Pro Multi-Sport',   desc: 'Connected leagues in 2+ sports.',              emoji: '🎯' },
   { id: 'fantasy_101',      title: 'Schooled',          desc: 'Completed the Fantasy 101 mini-course.',       emoji: '🎓' },
 ];
+
+// Streak tier ladder — the "stakes" behind the streak counter.
+export interface StreakTier { min: number; name: string; emoji: string }
+export const STREAK_TIERS: StreakTier[] = [
+  { min: 0,   name: 'Rookie',        emoji: '🌱' },
+  { min: 3,   name: 'Getting Hooked', emoji: '🔥' },
+  { min: 7,   name: 'Locked In',     emoji: '🔒' },
+  { min: 14,  name: 'Sicko',         emoji: '😤' },
+  { min: 30,  name: 'True Sicko',    emoji: '🏆' },
+  { min: 60,  name: 'Degenerate',    emoji: '💀' },
+  { min: 100, name: 'Hall of Famer', emoji: '👑' },
+];
+
+/** Current tier + the next milestone (for "N days to X" progress). */
+export function streakTier(days: number): { tier: StreakTier; next: StreakTier | null; toNext: number } {
+  let tier = STREAK_TIERS[0];
+  let next: StreakTier | null = null;
+  for (let i = 0; i < STREAK_TIERS.length; i++) {
+    if (days >= STREAK_TIERS[i].min) {
+      tier = STREAK_TIERS[i];
+      next = STREAK_TIERS[i + 1] ?? null;
+    }
+  }
+  return { tier, next, toNext: next ? next.min - days : 0 };
+}
 
 interface AchievementsState {
   unlocked:   Record<string, number>;  // id -> unlockedAt
