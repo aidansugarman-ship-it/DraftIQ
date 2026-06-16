@@ -392,6 +392,7 @@ export function SportHubScreen({ sport }: { sport: SportId }) {
             <ChipPill icon="trophy"         label="Badges"      subtitle="Your wins"       accent={colors.gold}   onPress={() => router.push('/achievements' as any)} />
             <ChipPill icon="document-text"  label="Cheat Sheet" subtitle="Draft bible"     accent={colors.purple} onPress={() => router.push('/cheat-sheet' as any)} />
             <ChipPill icon="reload-circle"  label="Week Recap"  subtitle="Win or loss"     accent={colors.coral}  onPress={() => router.push('/loss-recap' as any)} />
+            <ChipPill icon="hammer"         label="Auction"     subtitle="Bid draft"       accent={colors.gold}   onPress={() => router.push('/auction' as any)} />
             <ChipPill icon="podium"         label="Playoff Odds" subtitle="Season sim"     accent={colors.green}  onPress={() => router.push('/playoff-sim' as any)} />
             <ChipPill icon="cash"           label="FAAB Bid"    subtitle="How much?"       accent={colors.gold}   onPress={() => router.push('/faab-helper' as any)} />
             <ChipPill icon="play-circle"    label="Spotlight"  subtitle="TikTok feed"     accent={colors.green}  onPress={() => router.push('/spotlight' as any)} />
