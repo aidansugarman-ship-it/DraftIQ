@@ -15,6 +15,7 @@ import { useUserStore } from '@store/useUserStore';
 import { useYahooStore } from '@store/useYahooStore';
 import { useDailyStreakStore } from '@store/useDailyStreakStore';
 import { streakTier } from '@store/useAchievementsStore';
+import { useStreakStore } from '@store/useStreakStore';
 import { gemini } from '@services/gemini';
 import { espn } from '@services/espn';
 
@@ -34,6 +35,7 @@ export default function HomeScreen() {
   const yahooActive = useYahooStore(s => s.active);
   const streak      = useDailyStreakStore(s => s.current);
   const best        = useDailyStreakStore(s => s.best);
+  const pendingCalls = useStreakStore(s => s.calls.filter(c => !c.outcome && Date.now() - c.ts > 12 * 60 * 60 * 1000).length);
 
   const firstName = user?.displayName?.split(' ')[0] ?? 'GM';
   const primary   = user?.primarySport ?? 'nfl';
@@ -120,6 +122,24 @@ export default function HomeScreen() {
               </Animated.View>
             );
           })()}
+
+          {/* Grade-your-calls nudge — makes the outcome-memory loop actually get used */}
+          {pendingCalls >= 3 && (
+            <Animated.View entering={FadeIn.duration(400)}>
+              <TouchableOpacity style={styles.nudge} onPress={() => router.push('/track-record' as any)} activeOpacity={0.85}>
+                <Text style={{ fontSize: 20 }}>⚖️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium" color={colors.textPrimary} style={{ fontWeight: '800' }}>
+                    {pendingCalls} calls need a verdict
+                  </Text>
+                  <Text variant="caption" color={colors.textTertiary}>
+                    Grade them so the AI learns its record & sharpens up.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
           {/* Pick your sport — fast launchers */}
           <Text style={styles.sectionLabel}>YOUR SPORTS</Text>
@@ -259,6 +279,17 @@ const styles = StyleSheet.create({
     borderRadius:  radius.lg,
     borderWidth:   1,
     borderColor:   `${colors.coral}40`,
+    padding:       spacing.base,
+    marginBottom:  spacing.lg,
+  },
+  nudge: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing.sm,
+    backgroundColor: `${colors.gold}12`,
+    borderRadius:  radius.lg,
+    borderWidth:   1,
+    borderColor:   `${colors.gold}44`,
     padding:       spacing.base,
     marginBottom:  spacing.lg,
   },

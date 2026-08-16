@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@components/ui/Text';
 import { Sticker } from '@components/shared/Sticker';
+import { ShareableCard } from '@components/shared/ShareableCard';
 import { PageHeader } from '@components/shared/PageHeader';
 import { NoLeagueState } from '@components/shared/NoLeagueState';
 import { EmptyState } from '@components/shared/EmptyState';
@@ -125,6 +126,9 @@ Plain English. No fantasy jargon — assume the reader is casual. Be specific ab
                 <Text variant="bodyLarge" color={colors.textPrimary} style={{ fontWeight: '700', lineHeight: 24, marginTop: 6 }}>
                   "{recap.headline}"
                 </Text>
+                <View style={{ marginTop: spacing.sm }}>
+                  <ShareableCard headline={recap.headline} detail={recap.fix} sport={sport} label="SHARE RECAP" />
+                </View>
               </View>
 
               <Text style={styles.sectionLabel}>{recap.result === 'win' ? 'WHY YOU WON' : 'WHAT KILLED YOU'}</Text>
