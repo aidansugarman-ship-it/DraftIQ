@@ -141,3 +141,27 @@ export const signOut = async () => {
 
 export const isAppleAuthAvailable = (): Promise<boolean> =>
   AppleAuthentication.isAvailableAsync();
+
+/**
+ * Permanently delete the signed-in user's account + Firestore profile.
+ * Apple requires in-app account deletion for any app with sign-up.
+ * Returns 'reauth' if Firebase needs a fresh login before it'll delete.
+ */
+export const deleteAccount = async (): Promise<'ok' | 'reauth' | 'error'> => {
+  const user = auth.currentUser;
+  if (!user) return 'error';
+  try {
+    // Best-effort: remove the Firestore profile doc first.
+    try {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const { db, COLLECTIONS } = await import('@lib/firebase');
+      await deleteDoc(doc(db, COLLECTIONS.USERS, user.uid));
+    } catch { /* doc may not exist — continue to auth deletion */ }
+
+    await user.delete();
+    return 'ok';
+  } catch (e: any) {
+    if (e?.code === 'auth/requires-recent-login') return 'reauth';
+    return 'error';
+  }
+};

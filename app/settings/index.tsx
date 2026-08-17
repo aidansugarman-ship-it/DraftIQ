@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
-import { signOut } from '@services/firebaseAuth';
+import { signOut, deleteAccount } from '@services/firebaseAuth';
 import { useUserStore } from '@store/useUserStore';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -94,7 +94,24 @@ export default function SettingsScreen() {
       'This permanently deletes your account and all data. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => {} },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await deleteAccount();
+            if (result === 'ok') {
+              router.replace('/(auth)/welcome');
+            } else if (result === 'reauth') {
+              Alert.alert(
+                'Please sign in again',
+                'For your security, sign out and back in, then delete your account.',
+                [{ text: 'OK' }],
+              );
+            } else {
+              Alert.alert('Something went wrong', 'Could not delete your account. Try again in a moment.');
+            }
+          },
+        },
       ]
     );
   };
@@ -190,8 +207,8 @@ export default function SettingsScreen() {
 
         <Section title="ACCOUNT">
           <Row icon="person-outline"   label="Edit Profile"    onPress={() => router.push('/(tabs)/profile')} />
-          <Row icon="shield-outline"   label="Privacy Policy"  onPress={() => Linking.openURL('https://draftiq.app/privacy')} />
-          <Row icon="document-outline" label="Terms of Service" onPress={() => Linking.openURL('https://draftiq.app/terms')} />
+          <Row icon="shield-outline"   label="Privacy Policy"  onPress={() => router.push('/legal?doc=privacy' as any)} />
+          <Row icon="document-outline" label="Terms of Service" onPress={() => router.push('/legal?doc=terms' as any)} />
           <Row icon="mail-outline"     label="Contact Support" onPress={() => Linking.openURL('mailto:support@draftiq.app')} last />
         </Section>
 
