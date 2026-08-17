@@ -156,13 +156,44 @@ function release(): void {
   if (next) next();
 }
 
-async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
-  if (!GEMINI_API_KEY) return 'Add EXPO_PUBLIC_GEMINI_API_KEY to your .env to enable AI analysis.';
+// Call the server-side aiProxy Cloud Function (key stays off-device). Returns
+// null if the function isn't deployed/reachable so we can fall back locally.
+let proxyDisabledUntil = 0;
+async function askViaProxy(systemPrompt: string, fullPrompt: string, tier: Tier): Promise<string | null> {
+  // If the proxy recently failed hard (e.g. not deployed), skip it for a while
+  // so we don't add a slow round-trip to every call.
+  if (Date.now() < proxyDisabledUntil) return null;
+  try {
+    const { httpsCallable } = await import('firebase/functions');
+    const { functions } = await import('@lib/firebase');
+    const fn = httpsCallable<{ systemPrompt: string; prompt: string; tier: Tier; maxTokens: number }, { text: string }>(functions, 'aiProxy');
+    const res = await fn({ systemPrompt, prompt: fullPrompt, tier, maxTokens: 2048 });
+    return res.data?.text ?? null;
+  } catch (e: any) {
+    // "not-found"/"internal" on an undeployed function → stop trying for 5 min.
+    const code = e?.code ?? '';
+    if (code === 'functions/not-found' || code === 'functions/internal' || code === 'functions/unavailable') {
+      proxyDisabledUntil = Date.now() + 5 * 60 * 1000;
+    }
+    return null;
+  }
+}
 
+async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
   await acquire();
   try {
     const ctx = userContextLine();
     const fullPrompt = ctx ? `${ctx}\n\n${prompt}` : prompt;
+
+    // 1) Preferred path: server-side proxy (no key on device).
+    const viaProxy = await askViaProxy(SYSTEM_PROMPT, fullPrompt, tier);
+    if (viaProxy) return viaProxy;
+
+    // 2) Fallback: direct call, only possible if a client key is present.
+    //    Once the proxy is deployed + verified, remove EXPO_PUBLIC_GEMINI_API_KEY
+    //    from the build and this path goes dark automatically.
+    if (!GEMINI_API_KEY) return 'AI is warming up — the server key isn\'t set yet. Add it and try again.';
+
     const body = JSON.stringify({
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ parts: [{ text: fullPrompt }] }],

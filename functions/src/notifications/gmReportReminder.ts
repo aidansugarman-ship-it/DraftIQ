@@ -27,7 +27,7 @@ export const sendGMReportReminder = functions.pubsub
           body:  'Your weekly roster analysis, grades, and move recommendations are waiting.',
         },
         data: { type: 'gm-report' },
-        android: { channelId: 'gm-report' },
+        android: { notification: { channelId: 'gm-report' } },
       });
     }
 

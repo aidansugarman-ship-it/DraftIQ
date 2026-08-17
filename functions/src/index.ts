@@ -22,6 +22,9 @@ export * from './claude/articleWriter';
 // ── Gemini-powered functions (fast / high-frequency) ─────────────────────
 export * from './claude/dfsOptimizer';
 
+// ── AI proxy — server-side gateway for ALL client AI (keeps key off-device) ─
+export * from './ai/aiProxy';
+
 // ── Scheduled data sync ───────────────────────────────────────────────────
 export * from './data/syncPlayers';
 export * from './data/syncInjuries';

@@ -47,6 +47,6 @@ export const onInjuryUpdate = functions.firestore
         type:     'injury',
         playerId: context.params.playerId,
       },
-      android: { channelId: 'injury' },
+      android: { notification: { channelId: 'injury' } },
     });
   });

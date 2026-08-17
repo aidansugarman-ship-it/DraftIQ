@@ -43,6 +43,6 @@ export const onPlayerTrendingSpike = functions.firestore
         type:     'waiver',
         playerId: context.params.playerId,
       },
-      android: { channelId: 'waiver' },
+      android: { notification: { channelId: 'waiver' } },
     });
   });

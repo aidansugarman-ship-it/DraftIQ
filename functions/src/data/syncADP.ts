@@ -18,11 +18,13 @@ export const syncADPDaily = functions.pubsub
         const batch = db.batch();
         data.forEach(({ player_id, count }, index) => {
           const ref = db.collection('players').doc(`${sport}_${player_id}`);
-          batch.update(ref, {
+          // set+merge so a missing player doc is created instead of failing
+          // the whole batch at commit (update() throws on non-existent docs).
+          batch.set(ref, {
             adp:             index + 1,
             trendingAddCount: count,
             adpLastUpdated:  admin.firestore.FieldValue.serverTimestamp(),
-          }).catch(() => { /* player doc may not exist yet */ });
+          }, { merge: true });
         });
 
         await batch.commit();
