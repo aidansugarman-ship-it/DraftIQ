@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { View, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -15,7 +16,7 @@ import { OnboardingFooter } from '@components/shared/OnboardingFooter';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
-import { ARCHETYPES, type TeamArchetype } from '@types/draft';
+import { ARCHETYPES, type TeamArchetype } from '@/types/draft';
 import { useOnboardingStore } from '@store/useOnboardingStore';
 
 const ARCHETYPE_ORDER: TeamArchetype[] = [

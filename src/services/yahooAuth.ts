@@ -50,7 +50,7 @@ export function useYahooAuth() {
           grant_type:    'authorization_code',
           code:          response.params.code,
           redirect_uri:  redirectUri,
-          code_verifier: request.codeVerifier,
+          code_verifier: request.codeVerifier ?? '',
         }).toString();
 
         const res = await fetch(discovery.tokenEndpoint!, {

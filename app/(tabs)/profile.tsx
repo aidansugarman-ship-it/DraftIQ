@@ -22,7 +22,7 @@ import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { TIERS } from '@constants/tiers';
 import { SPORTS } from '@constants/sports';
-import { ARCHETYPES } from '@types/draft';
+import { ARCHETYPES } from '@/types/draft';
 import { signOut } from '@services/firebaseAuth';
 import { useUserStore } from '@store/useUserStore';
 

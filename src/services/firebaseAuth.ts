@@ -19,8 +19,8 @@ const buildDefaultProfile = (
   photoURL?: string,
 ): Omit<UserProfile, 'uid'> => ({
   email,
-  displayName: displayName ?? null,
-  photoURL:    photoURL    ?? null,
+  displayName: displayName ?? undefined,
+  photoURL:    photoURL    ?? undefined,
   tier:               'rookie',
   createdAt:          new Date().toISOString(),
   onboardingComplete: false,

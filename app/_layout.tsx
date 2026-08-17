@@ -25,11 +25,12 @@ import { scanWatchlistForNews } from '@services/watchlistScanner';
 import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
 import { GlossaryModalHost } from '@components/shared/GlossaryTerm';
+import { ErrorBoundary } from '@components/shared/ErrorBoundary';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, COLLECTIONS } from '@lib/firebase';
 import { queryClient } from '@lib/queryClient';
 import { useUserStore } from '@store/useUserStore';
-import type { UserProfile } from '@types/user';
+import type { UserProfile } from '@/types/user';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -160,10 +161,12 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
-      <GlossaryModalHost />
-    </QueryClientProvider>
+    <ErrorBoundary scope="root">
+      <QueryClientProvider client={queryClient}>
+        <StatusBar style="light" />
+        <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+        <GlossaryModalHost />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

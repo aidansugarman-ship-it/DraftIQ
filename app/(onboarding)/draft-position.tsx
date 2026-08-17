@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
-} from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -21,7 +16,7 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useOnboardingStore } from '@store/useOnboardingStore';
-import type { DraftPositionCategory } from '@types/draft';
+import type { DraftPositionCategory } from '@/types/draft';
 
 interface CategoryDef {
   id:        DraftPositionCategory;

@@ -10,15 +10,16 @@ interface OnboardingProgressProps {
   step:       number;     // 1-indexed
   totalSteps: number;
   showBack?:  boolean;
+  onBack?:    () => void;
 }
 
-export function OnboardingProgress({ step, totalSteps, showBack = true }: OnboardingProgressProps) {
+export function OnboardingProgress({ step, totalSteps, showBack = true, onBack }: OnboardingProgressProps) {
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
         {showBack && step > 1 ? (
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={onBack ?? (() => router.back())}
             style={styles.backBtn}
             activeOpacity={0.7}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

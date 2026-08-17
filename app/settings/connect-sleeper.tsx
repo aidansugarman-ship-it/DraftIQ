@@ -21,7 +21,7 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { sleeper, SleeperLeague, SleeperUser } from '@services/sleeper';
 import { useUserStore } from '@store/useUserStore';
-import type { ConnectedLeague } from '@types/user';
+import type { ConnectedLeague } from '@/types/user';
 
 type Step = 'username' | 'pick-league' | 'done';
 

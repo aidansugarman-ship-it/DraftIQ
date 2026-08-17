@@ -31,7 +31,7 @@ interface OnboardingState {
   reset:                  () => void;
 }
 
-const INITIAL: Omit<OnboardingState, 'setPreferredSports' | 'setExperienceLevel' | 'setScoringType' | 'setNumTeams' | 'setFormat' | 'setIsDynasty' | 'setArchetype' | 'setDraftPosition' | 'commit' | 'reset'> = {
+const INITIAL: Omit<OnboardingState, 'setPreferredSports' | 'setExperienceLevel' | 'setTeamStyle' | 'setScoringType' | 'setNumTeams' | 'setFormat' | 'setIsDynasty' | 'setArchetype' | 'setDraftPosition' | 'commit' | 'reset'> = {
   preferredSports:       [],
   primarySport:          'nfl',
   experienceLevel:       null,

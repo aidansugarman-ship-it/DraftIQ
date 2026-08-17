@@ -2,7 +2,7 @@ import { View, StyleSheet } from 'react-native';
 import { Text } from './Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
-import type { TierId } from '@types/subscription';
+import type { TierId } from '@/types/subscription';
 
 interface BadgeProps {
   tier: TierId;

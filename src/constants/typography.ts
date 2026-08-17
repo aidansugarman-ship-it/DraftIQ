@@ -25,6 +25,7 @@ export const fonts = {
 export const typography = {
   // ── Display — Bebas Neue ─────────────────────────────────────────────────
   hero:      { fontFamily: fonts.display, fontSize: 52, lineHeight: 52, letterSpacing: 2 },
+  heroSmall: { fontFamily: fonts.display, fontSize: 44, lineHeight: 46, letterSpacing: 1.5 },
   h1:        { fontFamily: fonts.display, fontSize: 40, lineHeight: 42, letterSpacing: 1.5 },
   h2:        { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, letterSpacing: 1.2 },
   h3:        { fontFamily: fonts.display, fontSize: 24, lineHeight: 28, letterSpacing: 0.8 },
