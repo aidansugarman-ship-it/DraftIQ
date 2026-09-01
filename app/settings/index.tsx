@@ -15,6 +15,7 @@ import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { signOut, deleteAccount } from '@services/firebaseAuth';
+import { restorePurchases, getTierFromCustomerInfo } from '@lib/revenuecat';
 import { useUserStore } from '@store/useUserStore';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -59,7 +60,8 @@ function Row({
 }
 
 export default function SettingsScreen() {
-  const { user } = useUserStore();
+  const { user, updateUser } = useUserStore();
+  const [restoring, setRestoring] = useState(false);
   const prefs = user?.notificationPreferences;
 
   const [notifs, setNotifs] = useState({
@@ -73,6 +75,27 @@ export default function SettingsScreen() {
 
   const toggle = (key: keyof typeof notifs) =>
     setNotifs(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Apple requires a working restore path for any app selling subscriptions
+  // (App Store Review Guideline 3.1.1) — a no-op button here is a rejection.
+  const handleRestore = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      const info = await restorePurchases();
+      const tier = getTierFromCustomerInfo(info);
+      if (tier !== 'rookie') {
+        updateUser({ tier });
+        Alert.alert('Restored!', 'Your subscription has been restored.');
+      } else {
+        Alert.alert('Nothing to restore', 'No active subscription found for this account.');
+      }
+    } catch {
+      Alert.alert('Restore failed', 'Could not restore purchases. Try again.');
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -190,9 +213,9 @@ export default function SettingsScreen() {
           />
           <Row
             icon="refresh-outline"
-            label="Restore Purchases"
+            label={restoring ? 'Restoring…' : 'Restore Purchases'}
             last
-            onPress={() => {}}
+            onPress={handleRestore}
           />
         </Section>
 

@@ -143,13 +143,6 @@ export default function BoardScreen() {
           {/* ── Header ──────────────────────────────────────────────────── */}
           <View style={styles.header}>
             <Text style={styles.title}>DRAFT BOARD</Text>
-            <TouchableOpacity
-              style={styles.filterBtn}
-              onPress={() => {}}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
           </View>
 
           {/* ── Search ──────────────────────────────────────────────────── */}

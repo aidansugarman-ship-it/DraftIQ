@@ -43,7 +43,7 @@ export default function ConnectSleeperScreen() {
     try {
       const su = await sleeper.getUser(username.trim());
       setSleeperUser(su);
-      const ls = await sleeper.getLeagues(su.user_id, '2024');
+      const ls = await sleeper.getLeagues(su.user_id);
       setLeagues(ls);
       if (ls.length === 0) {
         setError(`No 2024 NFL leagues found for ${su.display_name}. You may need to be active in a league.`);

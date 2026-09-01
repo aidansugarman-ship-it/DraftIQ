@@ -184,7 +184,6 @@ export default function ProfileScreen() {
                 icon="american-football-outline"
                 label="Primary Sport"
                 value={SPORTS[sport].shortLabel}
-                onPress={() => {}}
               />
               {league && (
                 <>
@@ -192,26 +191,22 @@ export default function ProfileScreen() {
                     icon="people-outline"
                     label="League Size"
                     value={`${league.numTeams} teams`}
-                    onPress={() => {}}
                   />
                   <SettingsRow
                     icon="stats-chart-outline"
                     label="Scoring"
                     value={league.scoringType?.toUpperCase()}
-                    onPress={() => {}}
                   />
                   <SettingsRow
                     icon="trophy-outline"
                     label="Format"
                     value={league.format === 'snake' ? 'Snake Draft' : 'Auction'}
-                    onPress={() => {}}
                   />
                   {league.isDynasty && (
                     <SettingsRow
                       icon="infinite-outline"
                       label="Dynasty Mode"
                       value="Enabled"
-                      onPress={() => {}}
                     />
                   )}
                 </>
@@ -221,7 +216,6 @@ export default function ProfileScreen() {
                   icon="bulb-outline"
                   label="Draft Archetype"
                   value={ARCHETYPES[archetype].label}
-                  onPress={() => {}}
                 />
               )}
             </View>
@@ -289,17 +283,14 @@ export default function ProfileScreen() {
               <SettingsRow
                 icon="shield-outline"
                 label="Privacy Policy"
-                onPress={() => {}}
               />
               <SettingsRow
                 icon="document-outline"
                 label="Terms of Service"
-                onPress={() => {}}
               />
               <SettingsRow
                 icon="star-outline"
                 label="Rate DraftIQ"
-                onPress={() => {}}
               />
               <SettingsRow
                 icon="log-out-outline"

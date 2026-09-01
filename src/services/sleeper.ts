@@ -91,6 +91,26 @@ export type NFLState = {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+/**
+ * The season Sleeper itself considers current. Hardcoding a year silently
+ * breaks every league lookup the moment the season rolls over, so we ask
+ * Sleeper and cache the answer for the session.
+ */
+let seasonCache: Promise<string> | null = null;
+const currentSeason = (): Promise<string> => {
+  if (!seasonCache) {
+    seasonCache = get<NFLState>('/state/nfl')
+      .then((s) => s.season)
+      // Fall back to the calendar year; the NFL season is labelled by the
+      // year it starts, so before September we want the previous year.
+      .catch(() => {
+        const now = new Date();
+        return String(now.getFullYear() - (now.getMonth() < 8 ? 1 : 0));
+      });
+  }
+  return seasonCache;
+};
+
 export const sleeper = {
   getUser: (username: string) =>
     get<SleeperUser>(`/user/${username}`),
@@ -98,8 +118,12 @@ export const sleeper = {
   getUserById: (userId: string) =>
     get<SleeperUser>(`/user/${userId}`),
 
-  getLeagues: (userId: string, season = '2024') =>
-    get<SleeperLeague[]>(`/user/${userId}/leagues/nfl/${season}`),
+  getLeagues: async (userId: string, season?: string) => {
+    const yr = season ?? (await currentSeason());
+    return get<SleeperLeague[]>(`/user/${userId}/leagues/nfl/${yr}`);
+  },
+
+  getCurrentSeason: currentSeason,
 
   getLeague: (leagueId: string) =>
     get<SleeperLeague>(`/league/${leagueId}`),
