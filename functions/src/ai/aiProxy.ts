@@ -36,6 +36,8 @@ interface AiProxyRequest {
   tier?:        'sharp' | 'fast';
   maxTokens?:   number;
   temperature?: number;
+  /** Ask Gemini for strict JSON instead of prose. */
+  json?:        boolean;
 }
 
 /**
@@ -123,6 +125,9 @@ export const aiProxy = functions
         temperature:     temp,
         maxOutputTokens: maxTokens,
         thinkingConfig:  { thinkingBudget: 0 },
+        // Native JSON mode is far more reliable than asking for JSON in the
+        // prompt and parsing whatever comes back wrapped in markdown fences.
+        ...(data.json ? { responseMimeType: 'application/json' } : {}),
       },
     });
 

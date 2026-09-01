@@ -6,9 +6,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import { gemini } from '@services/gemini';
-import { useGeminiTake } from '@hooks/useGeminiTake';
 import { useMyRosterNames } from '@hooks/useSleeperData';
+import { generateGMReport, type GMReport } from '@services/gmReport';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,56 +27,6 @@ import { canAccess } from '@constants/tiers';
 import { useUserStore } from '@store/useUserStore';
 
 // ─── Mock report data ─────────────────────────────────────────────────────────
-
-const MOCK_REPORT = {
-  week:        12,
-  generatedAt: 'Tuesday, Nov 19 · 6:00 AM',
-  overallGrade: 'B+',
-  headline: 'Your team is playoff-bound — but your RB depth is a ticking clock.',
-  summary:
-    'Strong QB and WR production carried you this week, but two key RBs are showing wear. You need a wire pickup at RB2 before the deadline or you\'re one injury from missing the playoffs.',
-
-  positionGrades: [
-    { pos: 'QB',  grade: 'A',  note: 'Allen went off. 41 pts Week 9 was your season-high.' },
-    { pos: 'RB',  grade: 'C+', note: 'Pollard and Achane both underwhelmed. Depth is thin.' },
-    { pos: 'WR',  grade: 'A-', note: 'Jefferson + Nacua giving you a elite 1-2 punch.' },
-    { pos: 'TE',  grade: 'B',  note: 'LaPorta is reliable but not a difference-maker.' },
-    { pos: 'K',   grade: 'B+', note: 'Consistent. Often overlooked but never a liability.' },
-    { pos: 'DEF', grade: 'B-', note: 'Streaming has worked but you need a better matchup Week 13.' },
-  ],
-
-  boldMoves: [
-    {
-      id: 'm1',
-      emoji: '⚡',
-      title: 'Drop Pollard, Add Jaylen Wright',
-      body: 'Wright has back-to-back 18+ carry weeks. Pollard is splitting carries and your week 13 matchup is brutal. Make the swap now while Wright is still available.',
-      urgency: 'high' as const,
-    },
-    {
-      id: 'm2',
-      emoji: '🔄',
-      title: 'Trade Kelce for a RB2',
-      body: 'Kelce is producing but TE is a position of depth on waivers. Flip him for an RB2 while his value is at peak — you can replace him with LaPorta full-time.',
-      urgency: 'medium' as const,
-    },
-    {
-      id: 'm3',
-      emoji: '📡',
-      title: 'Stream Dallas DEF vs. Washington',
-      body: 'Washington turns the ball over 2.3 times per game over the last 4 weeks. Dallas is a top-5 streaming option this week. Drop your current DEF.',
-      urgency: 'low' as const,
-    },
-  ],
-
-  flags: [
-    { id: 'f1', type: 'warning' as const, label: 'Achane: declining snap count', body: 'Used under 50% of snaps last 2 weeks. Monitor.' },
-    { id: 'f2', type: 'danger'  as const, label: 'RB bye week collision', body: 'Two of your RBs have byes in Week 14. Plan now.' },
-    { id: 'f3', type: 'good'    as const, label: 'Favorable 3-week stretch', body: 'Your WRs face bottom-10 defenses Weeks 12–14.' },
-  ],
-
-  weeklyOutlook: 'Projected 142 pts this week. Your matchup is winnable — opponent projects at 128. Key to victory: Allen needs 30+ and your WRs need to hold up against a decent CB corps.',
-};
 
 // ─── Grade color ──────────────────────────────────────────────────────────────
 
@@ -112,7 +61,7 @@ function GradeCard({ pos, grade, note, delay }: { pos: string; grade: string; no
   );
 }
 
-function BoldMove({ emoji, title, body, urgency, delay }: typeof MOCK_REPORT.boldMoves[number] & { delay: number }) {
+function BoldMove({ emoji, title, body, urgency, delay }: GMReport['boldMoves'][number] & { delay: number }) {
   const op = useSharedValue(0);
   const tx = useSharedValue(-10);
   useEffect(() => {
@@ -136,7 +85,7 @@ function BoldMove({ emoji, title, body, urgency, delay }: typeof MOCK_REPORT.bol
   );
 }
 
-function FlagRow({ type, label, body }: typeof MOCK_REPORT.flags[number]) {
+function FlagRow({ type, label, body }: GMReport['flags'][number]) {
   const icon  = type === 'danger' ? '🚨' : type === 'warning' ? '⚠️' : '✅';
   const color = type === 'danger' ? colors.coral : type === 'warning' ? colors.gold : colors.green;
   return (
@@ -164,14 +113,91 @@ export default function GMReportScreen() {
   }, []);
   const heroStyle = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
 
-  const r = MOCK_REPORT;
-  const gc = gradeColor(r.overallGrade);
-  const realRoster = useMyRosterNames();
-  const roster = realRoster.length > 0 ? realRoster : r.positionGrades.map(g => g.pos);
-  const { take: aiSummary, loading: summaryLoading } = useGeminiTake(
-    () => gemini.gmWeeklyReport(roster, 'NFL'),
-    [roster.join(',')]
+  const roster = useMyRosterNames();
+  const [r,       setReport]  = useState<GMReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed,  setFailed]  = useState(false);
+
+  const load = async () => {
+    if (roster.length === 0) { setLoading(false); return; }
+    setLoading(true);
+    setFailed(false);
+    const report = await generateGMReport(roster, 'NFL');
+    if (report) setReport(report); else setFailed(true);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [roster.join(',')]);
+
+  const gc = gradeColor(r?.overallGrade ?? '');
+
+  const Frame = ({ children }: { children: React.ReactNode }) => (
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>GM REPORT</Text>
+          <Text variant="caption" color={colors.textTertiary}>{r?.generatedAt ?? ''}</Text>
+        </View>
+        {children}
+      </SafeAreaView>
+    </View>
   );
+
+  if (roster.length === 0) {
+    return (
+      <Frame>
+        <View style={styles.stateWrap}>
+          <Text style={styles.stateEmoji}>🔗</Text>
+          <Text variant="bodyMedium" color={colors.textPrimary} align="center">
+            Connect your league first
+          </Text>
+          <Text variant="bodySmall" color={colors.textTertiary} align="center" style={{ lineHeight: 19 }}>
+            Your GM Report is built from your actual roster, so we need a league connected before we can grade it.
+          </Text>
+          <TouchableOpacity
+            style={styles.stateBtn}
+            onPress={() => router.push('/settings/connect-sleeper')}
+            activeOpacity={0.85}
+          >
+            <Text variant="bodySmallMedium" color={colors.background}>Connect a league</Text>
+          </TouchableOpacity>
+        </View>
+      </Frame>
+    );
+  }
+
+  if (loading || !r) {
+    return (
+      <Frame>
+        <View style={styles.stateWrap}>
+          {loading ? (
+            <>
+              <ActivityIndicator color={colors.green} />
+              <Text variant="bodySmall" color={colors.textTertiary} align="center">
+                Grading your roster…
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.stateEmoji}>🫤</Text>
+              <Text variant="bodyMedium" color={colors.textPrimary} align="center">
+                Couldn't build your report
+              </Text>
+              <Text variant="bodySmall" color={colors.textTertiary} align="center">
+                {failed ? 'The AI hit a snag.' : ''} Give it another go.
+              </Text>
+              <TouchableOpacity style={styles.stateBtn} onPress={load} activeOpacity={0.85}>
+                <Text variant="bodySmallMedium" color={colors.background}>Try again</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </Frame>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -210,10 +236,7 @@ export default function GMReportScreen() {
           {/* ── Summary ───────────────────────────────────────────────────── */}
           <SectionLabel label="AI SUMMARY" />
           <View style={styles.summaryCard}>
-            {summaryLoading
-              ? <ActivityIndicator size="small" color={colors.green} />
-              : <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 22 }}>{aiSummary || r.summary}</Text>
-            }
+            <Text variant="body" color={colors.textSecondary} style={{ lineHeight: 22 }}>{r.summary}</Text>
           </View>
 
           {/* ── Position grades ───────────────────────────────────────────── */}
@@ -256,9 +279,7 @@ export default function GMReportScreen() {
           <SectionLabel label="WEEKLY OUTLOOK" />
           <View style={styles.outlookCard}>
             <LinearGradient colors={['rgba(0,255,135,0.06)', 'transparent']} style={StyleSheet.absoluteFill} />
-            <Text style={styles.projLabel}>PROJECTED PTS</Text>
-            <Text style={styles.projPts}>{142}</Text>
-            <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 18, marginTop: spacing.sm }}>
+            <Text variant="bodySmall" color={colors.textSecondary} style={{ lineHeight: 18 }}>
               {r.weeklyOutlook}
             </Text>
           </View>
@@ -279,6 +300,21 @@ function SectionLabel({ label }: { label: string }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  stateWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.sm,
+  },
+  stateEmoji: { fontSize: 44, lineHeight: 52 },
+  stateBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.green,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+  },
   container: { flex: 1, backgroundColor: colors.background },
   safe:      { flex: 1 },
   header: {

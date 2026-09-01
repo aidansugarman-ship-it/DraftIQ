@@ -4,10 +4,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   Platform,
   Share,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useDraftVaultStore } from '@store/useDraftVaultStore';
+import { useOnboardingStore } from '@store/useOnboardingStore';
+import { buildDraftRecap, type DraftRecap, type RecapPick } from '@services/draftRecap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,67 +29,6 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 
-// ─── Mock recap data ──────────────────────────────────────────────────────────
-
-type Pos = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
-
-interface RecapPick {
-  round:   number;
-  pick:    number;
-  name:    string;
-  team:    string;
-  pos:     Pos;
-  grade:   'A+' | 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D' | 'F';
-  adp:     number;
-  value:   number;  // +/- vs ADP
-}
-
-interface DraftRecap {
-  id:           string;
-  date:         string;
-  format:       string;
-  scoring:      string;
-  numTeams:     number;
-  draftSlot:    number;
-  overallGrade: string;
-  picks:        RecapPick[];
-  bestPick:     string;
-  worstPick:    string;
-  summary:      string;
-  posGrades: {
-    pos:   Pos;
-    grade: string;
-    count: number;
-  }[];
-}
-
-const MOCK_RECAP: DraftRecap = {
-  id:           'draft_001',
-  date:         'Nov 19, 2024 · 2:14 PM',
-  format:       'Snake',
-  scoring:      'PPR',
-  numTeams:     12,
-  draftSlot:    5,
-  overallGrade: 'B+',
-  bestPick:     'Breece Hall (Rd 2, Pick 20)',
-  worstPick:    'Mark Andrews (Rd 3, Pick 29)',
-  summary:      'Strong draft overall. You secured elite WR1 value in rounds 1–2, then maximized RB depth in rounds 3–5. Minor reach on Andrews in round 3 was the only blemish.',
-  picks: [
-    { round: 1, pick: 5,  name: 'CeeDee Lamb',      team: 'DAL', pos: 'WR', grade: 'A',  adp: 2.0,  value: +3.0 },
-    { round: 2, pick: 20, name: 'Breece Hall',       team: 'NYJ', pos: 'RB', grade: 'A+', adp: 6.0,  value: +6.0 },
-    { round: 3, pick: 29, name: 'Mark Andrews',      team: 'BAL', pos: 'TE', grade: 'C+', adp: 46.0, value: -17.0 },
-    { round: 4, pick: 44, name: 'Josh Jacobs',       team: 'GB',  pos: 'RB', grade: 'B+', adp: 20.0, value: +2.0 },
-    { round: 5, pick: 53, name: 'Drake London',      team: 'ATL', pos: 'WR', grade: 'B',  adp: 53.3, value: +0.3 },
-  ],
-  posGrades: [
-    { pos: 'WR',  grade: 'A',  count: 2 },
-    { pos: 'RB',  grade: 'B+', count: 2 },
-    { pos: 'TE',  grade: 'C+', count: 1 },
-  ],
-};
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const GRADE_COLORS: Record<string, string> = {
   'A+': colors.green,
   'A':  colors.green,
@@ -97,7 +40,7 @@ const GRADE_COLORS: Record<string, string> = {
   'F':  '#FF4444',
 };
 
-const POS_COLORS: Record<Pos, string> = {
+const POS_COLORS: Record<string, string> = {
   QB:  colors.coral,
   RB:  colors.green,
   WR:  colors.blue,
@@ -108,7 +51,7 @@ const POS_COLORS: Record<Pos, string> = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function PosBadge({ pos }: { pos: Pos }) {
+function PosBadge({ pos }: { pos: string }) {
   return (
     <View style={[pb.badge, { backgroundColor: `${POS_COLORS[pos]}18` }]}>
       <Text variant="labelSmall" style={{ color: POS_COLORS[pos] }}>{pos}</Text>
@@ -126,8 +69,14 @@ function GradeChip({ grade }: { grade: string }) {
 }
 
 function PickRow({ pick, index }: { pick: RecapPick; index: number }) {
-  const valueColor = pick.value >= 3 ? colors.green : pick.value >= -2 ? colors.textTertiary : colors.coral;
-  const valueLabel = pick.value > 0 ? `+${pick.value.toFixed(1)} value` : `${pick.value.toFixed(1)} value`;
+  // value is null when the player isn't on the consensus board — show nothing
+  // rather than a fabricated number.
+  const v = pick.value;
+  const valueColor = v == null ? colors.textTertiary
+    : v >= 3 ? colors.green
+    : v >= -2 ? colors.textTertiary
+    : colors.coral;
+  const valueLabel = v == null ? '' : v > 0 ? `+${v} value` : `${v} value`;
 
   return (
     <Animated.View entering={FadeIn.delay(index * 70).duration(300)} style={pr.row}>
@@ -137,7 +86,11 @@ function PickRow({ pick, index }: { pick: RecapPick; index: number }) {
       <PosBadge pos={pick.pos} />
       <View style={{ flex: 1 }}>
         <Text variant="bodyMedium" color={colors.textPrimary}>{pick.name}</Text>
-        <Text variant="caption" color={colors.textTertiary}>{pick.team} · ADP {pick.adp} · Pick {pick.pick}</Text>
+        <Text variant="caption" color={colors.textTertiary}>
+          {pick.team}
+          {pick.consensusRank != null ? ` · Rank ${pick.consensusRank}` : ''}
+          {' · Pick '}{pick.pick}
+        </Text>
       </View>
       <View style={pr.right}>
         <Text variant="caption" style={{ color: valueColor }}>{valueLabel}</Text>
@@ -235,8 +188,34 @@ function ShareCard({ recap }: { recap: DraftRecap }) {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function RecapScreen() {
-  const recap = MOCK_RECAP;
-  const overallColor = GRADE_COLORS[recap.overallGrade] ?? colors.green;
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const drafts = useDraftVaultStore((s) => s.drafts);
+  const onboarding = useOnboardingStore();
+
+  // Recap the requested draft, or the most recent one if none was specified.
+  const draft = id
+    ? drafts.find((d) => d.id === id)
+    : [...drafts].sort((a, b) => b.ts - a.ts)[0];
+
+  const [recap,   setRecap]   = useState<DraftRecap | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    if (!draft) { setLoading(false); return; }
+    setLoading(true);
+    const built = await buildDraftRecap(draft, {
+      numTeams:  onboarding.numTeams,
+      scoring:   onboarding.scoringType ?? 'PPR',
+      format:    onboarding.format === 'auction' ? 'Auction' : 'Snake',
+      draftSlot: onboarding.draftPositionNumber,
+    });
+    setRecap(built);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [draft?.id]);
+
+  const overallColor = recap ? (GRADE_COLORS[recap.overallGrade] ?? colors.green) : colors.green;
 
   const op = useSharedValue(0);
   const ty = useSharedValue(16);
@@ -247,12 +226,66 @@ export default function RecapScreen() {
   const heroStyle = useAnimatedStyle(() => ({ opacity: op.value, transform: [{ translateY: ty.value }] }));
 
   async function handleShare() {
+    if (!recap) return;
     try {
       await Share.share({
         message: `I just finished a mock draft on DraftIQ and got a ${recap.overallGrade}!\n\nMy top pick: ${recap.bestPick}\n\nDownload DraftIQ to build your winning team.`,
         title: `DraftIQ Mock Draft — ${recap.overallGrade}`,
       });
     } catch (_) {}
+  }
+
+  if (!draft || loading || !recap) {
+    return (
+      <View style={styles.container}>
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text variant="bodyMedium" color={colors.textPrimary}>Draft Recap</Text>
+            <View style={{ width: 36 }} />
+          </View>
+          <View style={styles.stateWrap}>
+            {loading && draft ? (
+              <>
+                <ActivityIndicator color={colors.green} />
+                <Text variant="bodySmall" color={colors.textTertiary} align="center">
+                  Grading your draft…
+                </Text>
+              </>
+            ) : !draft ? (
+              <>
+                <Text style={styles.stateEmoji}>🏈</Text>
+                <Text variant="bodyMedium" color={colors.textPrimary} align="center">
+                  No drafts yet
+                </Text>
+                <Text variant="bodySmall" color={colors.textTertiary} align="center" style={{ lineHeight: 19 }}>
+                  Finish a mock draft and your recap will show up here, graded pick by pick.
+                </Text>
+                <TouchableOpacity
+                  style={styles.stateBtn}
+                  onPress={() => router.push('/draft')}
+                  activeOpacity={0.85}
+                >
+                  <Text variant="bodySmallMedium" color={colors.background}>Start a mock draft</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.stateEmoji}>🫤</Text>
+                <Text variant="bodyMedium" color={colors.textPrimary} align="center">
+                  Couldn't grade this draft
+                </Text>
+                <TouchableOpacity style={styles.stateBtn} onPress={load} activeOpacity={0.85}>
+                  <Text variant="bodySmallMedium" color={colors.background}>Try again</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </SafeAreaView>
+      </View>
+    );
   }
 
   return (
@@ -364,6 +397,21 @@ export default function RecapScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  stateWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.sm,
+  },
+  stateEmoji: { fontSize: 44, lineHeight: 52 },
+  stateBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.green,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+  },
   container: { flex: 1, backgroundColor: colors.background },
   safe:      { flex: 1 },
   scroll: {

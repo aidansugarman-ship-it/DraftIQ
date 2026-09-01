@@ -166,7 +166,7 @@ function release(): void {
  *
  * Model retry / 429 fallback to the fast tier is handled inside the proxy.
  */
-async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
+async function ask(prompt: string, tier: Tier = 'sharp', json = false): Promise<string> {
   await acquire();
   try {
     const ctx = userContextLine();
@@ -181,7 +181,7 @@ async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
     const { httpsCallable } = await import('firebase/functions');
     const { functions } = await import('@lib/firebase');
     const fn = httpsCallable<
-      { systemPrompt: string; prompt: string; tier: Tier; maxTokens: number },
+      { systemPrompt: string; prompt: string; tier: Tier; maxTokens: number; json?: boolean },
       { text: string }
     >(functions, 'aiProxy');
 
@@ -191,6 +191,7 @@ async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
         prompt: fullPrompt,
         tier,
         maxTokens: 2048,
+        ...(json ? { json: true } : {}),
       });
       const text = res.data?.text;
       if (!text) throw new Error('Empty response from the AI.');
@@ -210,6 +211,24 @@ async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
     }
   } finally {
     release();
+  }
+}
+
+/**
+ * Structured AI call. Uses Gemini's native JSON mode via the proxy, so the
+ * response is machine-readable rather than prose we have to scrape.
+ *
+ * Returns null instead of throwing — every caller has a real fallback UI, and
+ * a malformed model response should degrade the screen, not break it.
+ */
+export async function askJson<T>(prompt: string, tier: Tier = 'sharp'): Promise<T | null> {
+  try {
+    const raw = await ask(prompt, tier, true);
+    // JSON mode is reliable, but strip markdown fences just in case.
+    const cleaned = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    return JSON.parse(cleaned) as T;
+  } catch {
+    return null;
   }
 }
 
