@@ -5,6 +5,8 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,32 +22,9 @@ import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
 import { typography } from '@constants/typography';
 import { useUserStore } from '@store/useUserStore';
+import { getDraftBoard, type BoardPlayer } from '@services/draftBoard';
 
 type PositionFilter = 'ALL' | 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_PLAYERS = [
-  { id: '1',  rank: 1,  name: 'Christian McCaffrey', pos: 'RB',  team: 'SF',  score: 99, adp: 1.1,  trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '2',  rank: 2,  name: 'CeeDee Lamb',         pos: 'WR',  team: 'DAL', score: 97, adp: 2.3,  trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '3',  rank: 3,  name: 'Tyreek Hill',         pos: 'WR',  team: 'MIA', score: 96, adp: 3.1,  trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '4',  rank: 4,  name: 'Justin Jefferson',    pos: 'WR',  team: 'MIN', score: 95, adp: 4.0,  trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '5',  rank: 5,  name: 'Ja\'Marr Chase',      pos: 'WR',  team: 'CIN', score: 94, adp: 4.8,  trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '6',  rank: 6,  name: 'Breece Hall',         pos: 'RB',  team: 'NYJ', score: 93, adp: 5.5,  trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '7',  rank: 7,  name: 'Saquon Barkley',      pos: 'RB',  team: 'PHI', score: 92, adp: 6.2,  trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '8',  rank: 8,  name: 'Josh Allen',          pos: 'QB',  team: 'BUF', score: 91, adp: 7.0,  trend: 'stable' as const, injuryStatus: 'questionable' as const },
-  { id: '9',  rank: 9,  name: 'Lamar Jackson',       pos: 'QB',  team: 'BAL', score: 90, adp: 7.5,  trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '10', rank: 10, name: 'Amon-Ra St. Brown',   pos: 'WR',  team: 'DET', score: 89, adp: 8.3,  trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '11', rank: 11, name: 'Travis Kelce',        pos: 'TE',  team: 'KC',  score: 88, adp: 9.0,  trend: 'down'   as const, injuryStatus: 'healthy' as const },
-  { id: '12', rank: 12, name: 'Sam LaPorta',         pos: 'TE',  team: 'DET', score: 86, adp: 11.2, trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '13', rank: 13, name: 'De\'Von Achane',      pos: 'RB',  team: 'MIA', score: 85, adp: 10.1, trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '14', rank: 14, name: 'Puka Nacua',          pos: 'WR',  team: 'LAR', score: 84, adp: 12.5, trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '15', rank: 15, name: 'Davante Adams',       pos: 'WR',  team: 'LV',  score: 82, adp: 13.0, trend: 'down'   as const, injuryStatus: 'healthy' as const },
-  { id: '16', rank: 16, name: 'CJ Stroud',           pos: 'QB',  team: 'HOU', score: 81, adp: 14.2, trend: 'up'     as const, injuryStatus: 'healthy' as const },
-  { id: '17', rank: 17, name: 'Rashee Rice',         pos: 'WR',  team: 'KC',  score: 80, adp: 15.1, trend: 'up'     as const, injuryStatus: 'doubtful' as const },
-  { id: '18', rank: 18, name: 'Tony Pollard',        pos: 'RB',  team: 'TEN', score: 78, adp: 16.5, trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '19', rank: 19, name: 'Stefon Diggs',        pos: 'WR',  team: 'HOU', score: 77, adp: 17.3, trend: 'stable' as const, injuryStatus: 'healthy' as const },
-  { id: '20', rank: 20, name: 'Mark Andrews',        pos: 'TE',  team: 'BAL', score: 75, adp: 18.0, trend: 'down'   as const, injuryStatus: 'questionable' as const },
-];
 
 const POSITIONS: PositionFilter[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
@@ -58,9 +37,10 @@ const STATUS_COLOR: Record<string, string> = {
   'day-to-day': colors.statusQuestionable,
 };
 
-function scoreColor(n: number) {
-  if (n >= 90) return colors.green;
-  if (n >= 80) return colors.gold;
+// Elite / starter / depth tiers by overall consensus rank.
+function rankColor(rank: number) {
+  if (rank <= 24) return colors.green;
+  if (rank <= 60) return colors.gold;
   return colors.textSecondary;
 }
 
@@ -76,7 +56,7 @@ function PlayerRow({
   item,
   index,
 }: {
-  item: typeof MOCK_PLAYERS[number];
+  item: BoardPlayer;
   index: number;
 }) {
   const trendColor = item.trend === 'up' ? colors.green : item.trend === 'down' ? colors.coral : colors.textTertiary;
@@ -107,13 +87,17 @@ function PlayerRow({
             <Text variant="labelSmall" color={colors.textTertiary}>{item.pos}</Text>
           </View>
           <Text variant="caption" color={colors.textTertiary}>{item.team}</Text>
-          <Text variant="caption" color={colors.textTertiary}>ADP {item.adp}</Text>
+          {item.age != null && (
+            <Text variant="caption" color={colors.textTertiary}>Age {item.age}</Text>
+          )}
         </View>
       </View>
 
       <Text style={[rowStyles.trend, { color: trendColor }]}>{trendIcon}</Text>
 
-      <Text style={[rowStyles.score, { color: scoreColor(item.score) }]}>{item.score}</Text>
+      <Text style={[rowStyles.score, { color: rankColor(item.rank) }]}>
+        {item.pos}{item.posRank}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -123,6 +107,23 @@ function PlayerRow({
 export default function BoardScreen() {
   const [posFilter, setPosFilter] = useState<PositionFilter>('ALL');
   const [query,     setQuery]     = useState('');
+  const [players,   setPlayers]   = useState<BoardPlayer[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async (force = false) => {
+    const board = await getDraftBoard(force);
+    setPlayers(board);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(true);
+    setRefreshing(false);
+  };
 
   const op = useSharedValue(0);
   useEffect(() => {
@@ -130,7 +131,7 @@ export default function BoardScreen() {
   }, []);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: op.value }));
 
-  const filtered = MOCK_PLAYERS.filter((p) => {
+  const filtered = players.filter((p) => {
     const matchPos   = posFilter === 'ALL' || p.pos === posFilter;
     const matchQuery = query.trim() === '' || p.name.toLowerCase().includes(query.toLowerCase());
     return matchPos && matchQuery;
@@ -196,24 +197,44 @@ export default function BoardScreen() {
             <Text variant="labelSmall" color={colors.textTertiary} style={styles.colRank}>#</Text>
             <Text variant="labelSmall" color={colors.textTertiary} style={{ flex: 1 }}>PLAYER</Text>
             <Text variant="labelSmall" color={colors.textTertiary} style={styles.colTrend}>TRD</Text>
-            <Text variant="labelSmall" color={colors.textTertiary} style={styles.colScore}>SCR</Text>
+            <Text variant="labelSmall" color={colors.textTertiary} style={styles.colScore}>POS</Text>
           </View>
 
           {/* ── Player list ─────────────────────────────────────────────── */}
-          <FlatList
-            data={filtered}
-            keyExtractor={(p) => p.id}
-            renderItem={({ item, index }) => <PlayerRow item={item} index={index} />}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text variant="body" color={colors.textTertiary} align="center">
-                  No players match your search.
-                </Text>
-              </View>
-            }
-          />
+          {loading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color={colors.green} />
+              <Text variant="body" color={colors.textTertiary} align="center" style={{ marginTop: spacing.md }}>
+                Loading the board…
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filtered}
+              keyExtractor={(p) => p.id}
+              renderItem={({ item, index }) => <PlayerRow item={item} index={index} />}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.listContent}
+              initialNumToRender={20}
+              windowSize={10}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={colors.textTertiary}
+                />
+              }
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <Text variant="body" color={colors.textTertiary} align="center">
+                    {players.length === 0
+                      ? "Couldn't load the board. Pull down to try again."
+                      : 'No players match your search.'}
+                  </Text>
+                </View>
+              }
+            />
+          )}
         </Animated.View>
       </SafeAreaView>
     </View>
