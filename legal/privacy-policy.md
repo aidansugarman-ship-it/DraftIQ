@@ -1,6 +1,6 @@
 # DraftIQ — Privacy Policy
 
-_Last updated: [DATE]_
+_Last updated: September 1, 2026_
 
 DraftIQ ("we", "us") is a fantasy-sports advisory app. This policy explains what
 we collect, why, and your choices. We built DraftIQ to be a helper on top of your
@@ -12,6 +12,17 @@ or roster moves on your behalf without your explicit action.
 **Account information.** When you sign up we collect your email address and, if you
 provide one, a display name and profile photo. Authentication is handled by Google
 Firebase.
+
+**Anonymous session before sign-up.** So you can try the app's AI before creating
+an account, we create an anonymous Firebase session on first launch. It is a random
+identifier only — it contains no name, email, or device identifier, we do not use
+it for advertising or tracking across apps or websites, and it is discarded when
+you create a real account or delete the app.
+
+**Crash diagnostics.** If crash reporting is enabled in a release, we collect
+technical crash reports (error type, stack trace, app version, OS version) to fix
+bugs. These are stripped of personal information before they leave your device: we
+send only your account's random identifier — never your email, name, or IP address.
 
 **Fantasy league data (read-only).** If you connect a Yahoo Fantasy account, we
 request **read-only** access to your leagues, rosters, and standings so the app can
@@ -46,6 +57,7 @@ through our secure server to generate a response. We do not sell this data.
 - **Google Gemini API** (AI responses) — routed through our server; the API key is never in the app
 - **Yahoo Fantasy API** (read-only league data, only if you connect)
 - **ESPN / Sleeper / MLB / NHL public APIs** (public sports data — no personal data sent)
+- **Sentry** (crash diagnostics, if enabled) — [sentry.io/privacy](https://sentry.io/privacy/)
 
 ## Notifications
 

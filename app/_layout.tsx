@@ -26,6 +26,7 @@ import { useYahooStore } from '@store/useYahooStore';
 import { isYahooConnected } from '@services/yahooAuth';
 import { GlossaryModalHost } from '@components/shared/GlossaryTerm';
 import { ErrorBoundary } from '@components/shared/ErrorBoundary';
+import { initErrorReporting, setReportingUser } from '@services/errorReporting';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, COLLECTIONS } from '@lib/firebase';
 import { queryClient } from '@lib/queryClient';
@@ -33,6 +34,10 @@ import { useUserStore } from '@store/useUserStore';
 import type { UserProfile } from '@/types/user';
 
 SplashScreen.preventAutoHideAsync();
+
+// Start crash reporting before anything renders, so startup crashes are caught.
+// No-ops entirely until EXPO_PUBLIC_SENTRY_DSN is set.
+initErrorReporting();
 
 export default function RootLayout() {
   const { setUser, clearUser, setLoading } = useUserStore();
@@ -47,6 +52,16 @@ export default function RootLayout() {
   // Auth state listener — runs once, persists for app lifetime
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Anonymous sessions exist only so the pre-signup screens can reach the
+      // AI proxy (which requires auth). They are NOT a signed-in user — keep
+      // them on the welcome flow exactly as if they had no session at all.
+      if (firebaseUser?.isAnonymous) {
+        clearUser();
+        setReportingUser(null);
+        return;
+      }
+      // Tag crashes with the uid only — never email or name (see errorReporting).
+      setReportingUser(firebaseUser?.uid ?? null);
       if (firebaseUser) {
         try {
           const snap = await getDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid));

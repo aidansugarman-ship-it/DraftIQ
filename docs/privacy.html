@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DraftIQ — Privacy Policy</title>
+<meta name="description" content="DraftIQ — Privacy Policy for DraftIQ, a fantasy sports advisory app.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0B0F0E; --surface:#141917; --text:#F2F5F3; --muted:#9BA5A0;
+  --green:#22C55E; --border:#232B28;
+}
+body{
+  background:var(--bg); color:var(--text);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  padding:0 20px 80px; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:720px;margin:0 auto}
+header{padding:48px 0 32px;border-bottom:1px solid var(--border);margin-bottom:36px}
+.logo{
+  display:inline-flex;align-items:center;gap:10px;
+  font-weight:800;font-size:19px;letter-spacing:-.4px;color:var(--text);text-decoration:none;
+}
+.dot{width:11px;height:11px;border-radius:50%;background:var(--green);display:inline-block}
+h1{font-size:34px;line-height:1.15;letter-spacing:-1px;margin:22px 0 6px;font-weight:800}
+h2{font-size:19px;margin:38px 0 10px;font-weight:700;letter-spacing:-.3px}
+p{margin:0 0 14px;color:#D7DEDA}
+ul{margin:0 0 16px;padding-left:22px}
+li{margin-bottom:7px;color:#D7DEDA}
+strong{color:var(--text);font-weight:650}
+a{color:var(--green)}
+.updated{color:var(--muted);font-size:14px;margin-bottom:8px}
+nav{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+nav a{
+  display:inline-block;padding:7px 15px;border:1px solid var(--border);
+  border-radius:999px;font-size:14px;text-decoration:none;color:var(--muted);
+}
+nav a:hover{border-color:var(--green);color:var(--green)}
+nav a[aria-current]{border-color:var(--green);color:var(--green)}
+footer{
+  margin-top:56px;padding-top:22px;border-top:1px solid var(--border);
+  color:var(--muted);font-size:14px;
+}
+@media(max-width:520px){h1{font-size:27px}body{padding:0 16px 60px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a class="logo" href="./"><span class="dot"></span>DraftIQ</a>
+  <nav>
+    <a href="./">Home</a>
+    <a href="./privacy.html" aria-current="page">Privacy Policy</a>
+    <a href="./terms.html">Terms of Service</a>
+  </nav>
+</header>
+<main>
+<h1>DraftIQ — Privacy Policy</h1>
+<p class="updated">Last updated: September 1, 2026</p>
+<p>DraftIQ (&quot;we&quot;, &quot;us&quot;) is a fantasy-sports advisory app. This policy explains what we collect, why, and your choices. We built DraftIQ to be a helper on top of your existing fantasy leagues — we are not a fantasy platform and we never place trades or roster moves on your behalf without your explicit action.</p>
+<h2>Information we collect</h2>
+<p><strong>Account information.</strong> When you sign up we collect your email address and, if you provide one, a display name and profile photo. Authentication is handled by Google Firebase.</p>
+<p><strong>Anonymous session before sign-up.</strong> So you can try the app&#x27;s AI before creating an account, we create an anonymous Firebase session on first launch. It is a random identifier only — it contains no name, email, or device identifier, we do not use it for advertising or tracking across apps or websites, and it is discarded when you create a real account or delete the app.</p>
+<p><strong>Crash diagnostics.</strong> If crash reporting is enabled in a release, we collect technical crash reports (error type, stack trace, app version, OS version) to fix bugs. These are stripped of personal information before they leave your device: we send only your account&#x27;s random identifier — never your email, name, or IP address.</p>
+<p><strong>Fantasy league data (read-only).</strong> If you connect a Yahoo Fantasy account, we request <strong>read-only</strong> access to your leagues, rosters, and standings so the app can give you personalized advice. We do not have permission to modify your teams. You can disconnect Yahoo at any time in Settings, which deletes the stored access token from your device.</p>
+<p><strong>Usage data stored on your device.</strong> Your streak, favorites, saved mock drafts, graded calls, and preferences are stored locally on your device (AsyncStorage) and in your private Firestore profile.</p>
+<p><strong>AI request content.</strong> When you use an AI feature, the relevant context (e.g. your roster, a player name, recent sports headlines) is sent to Google&#x27;s Gemini API through our secure server to generate a response. We do not sell this data.</p>
+<h2>How we use it</h2>
+<ul>
+<li>To provide personalized lineup, waiver, trade, and draft advice</li>
+<li>To operate account features (sign-in, streaks, saved drafts, alerts)</li>
+<li>To send optional notifications you enable (daily reminders, player news)</li>
+<li>To maintain and improve the service</li>
+</ul>
+<h2>What we do NOT do</h2>
+<ul>
+<li>We do not sell your personal information.</li>
+<li>We do not place trades, add/drops, or lineup changes on your behalf.</li>
+<li>We do not access your Yahoo account beyond read-only league data.</li>
+</ul>
+<h2>Third-party services</h2>
+<ul>
+<li><strong>Google Firebase</strong> (authentication, database) — <a href="https://firebase.google.com/support/privacy" rel="noopener">firebase.google.com/support/privacy</a></li>
+<li><strong>Google Gemini API</strong> (AI responses) — routed through our server; the API key is never in the app</li>
+<li><strong>Yahoo Fantasy API</strong> (read-only league data, only if you connect)</li>
+<li><strong>ESPN / Sleeper / MLB / NHL public APIs</strong> (public sports data — no personal data sent)</li>
+<li><strong>Sentry</strong> (crash diagnostics, if enabled) — <a href="https://sentry.io/privacy/" rel="noopener">sentry.io/privacy</a></li>
+</ul>
+<h2>Notifications</h2>
+<p>Notifications are optional and off until you enable them. You can turn them off in Settings or your device&#x27;s system settings at any time.</p>
+<h2>Data retention &amp; deletion</h2>
+<p>Your local data is removed when you delete the app or sign out. To delete your account and associated Firestore data, use <strong>Settings → Delete Account</strong>, or email us at the address below and we will delete it within 30 days.</p>
+<h2>Children</h2>
+<p>DraftIQ is not directed to children under 13 and we do not knowingly collect data from them.</p>
+<h2>Changes</h2>
+<p>We may update this policy; the &quot;last updated&quot; date will change. Material changes will be surfaced in the app.</p>
+<h2>Contact</h2>
+<p>Questions or deletion requests: <strong>support@draftiq.app</strong></p>
+</main>
+<footer>
+  DraftIQ is an independent advisory tool. It is not affiliated with Yahoo, ESPN,
+  Sleeper, the NFL, NBA, MLB, or NHL.<br>
+  Contact: <a href="mailto:support@draftiq.app">support@draftiq.app</a>
+</footer>
+</div>
+</body>
+</html>

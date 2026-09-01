@@ -1,6 +1,10 @@
 import { useUserStore } from '@store/useUserStore';
 
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
+// NO API KEY HERE — BY DESIGN.
+// All Gemini traffic is proxied through the `aiProxy` Cloud Function, which
+// holds the key as a Firebase secret. Never reintroduce EXPO_PUBLIC_GEMINI_API_KEY:
+// anything prefixed EXPO_PUBLIC_ is embedded in the shipped bundle and is
+// trivially extractable from the .ipa.
 
 // Google killed the free tier for gemini-2.0-flash (limit: 0). We run a
 // two-tier hybrid on the free tier instead:
@@ -14,10 +18,6 @@ const MODELS = {
   fast:  'gemini-2.5-flash-lite',
 } as const;
 type Tier = keyof typeof MODELS;
-
-function urlFor(tier: Tier): string {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${MODELS[tier]}:generateContent?key=${GEMINI_API_KEY}`;
-}
 
 // Pulled at call time so it always reflects the user's current setting.
 function userContextLine(): string {
@@ -156,92 +156,58 @@ function release(): void {
   if (next) next();
 }
 
-// Call the server-side aiProxy Cloud Function (key stays off-device). Returns
-// null if the function isn't deployed/reachable so we can fall back locally.
-let proxyDisabledUntil = 0;
-async function askViaProxy(systemPrompt: string, fullPrompt: string, tier: Tier): Promise<string | null> {
-  // If the proxy recently failed hard (e.g. not deployed), skip it for a while
-  // so we don't add a slow round-trip to every call.
-  if (Date.now() < proxyDisabledUntil) return null;
-  try {
-    const { httpsCallable } = await import('firebase/functions');
-    const { functions } = await import('@lib/firebase');
-    const fn = httpsCallable<{ systemPrompt: string; prompt: string; tier: Tier; maxTokens: number }, { text: string }>(functions, 'aiProxy');
-    const res = await fn({ systemPrompt, prompt: fullPrompt, tier, maxTokens: 2048 });
-    return res.data?.text ?? null;
-  } catch (e: any) {
-    // "not-found"/"internal" on an undeployed function → stop trying for 5 min.
-    const code = e?.code ?? '';
-    if (code === 'functions/not-found' || code === 'functions/internal' || code === 'functions/unavailable') {
-      proxyDisabledUntil = Date.now() + 5 * 60 * 1000;
-    }
-    return null;
-  }
-}
-
+/**
+ * Every AI call goes through the `aiProxy` Cloud Function. The Gemini key lives
+ * server-side as a Firebase secret and never ships in the app bundle.
+ *
+ * The proxy requires an auth context (so the endpoint isn't open to the world),
+ * which is why we ensure a session first — anonymous is enough, and it's what
+ * lets the pre-signup "taste a take" screen work without a key on device.
+ *
+ * Model retry / 429 fallback to the fast tier is handled inside the proxy.
+ */
 async function ask(prompt: string, tier: Tier = 'sharp'): Promise<string> {
   await acquire();
   try {
     const ctx = userContextLine();
     const fullPrompt = ctx ? `${ctx}\n\n${prompt}` : prompt;
 
-    // 1) Preferred path: server-side proxy (no key on device).
-    const viaProxy = await askViaProxy(SYSTEM_PROMPT, fullPrompt, tier);
-    if (viaProxy) return viaProxy;
-
-    // 2) Fallback: direct call, only possible if a client key is present.
-    //    Once the proxy is deployed + verified, remove EXPO_PUBLIC_GEMINI_API_KEY
-    //    from the build and this path goes dark automatically.
-    if (!GEMINI_API_KEY) return 'AI is warming up — the server key isn\'t set yet. Add it and try again.';
-
-    const body = JSON.stringify({
-      system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      contents: [{ parts: [{ text: fullPrompt }] }],
-      generationConfig: {
-        temperature:     0.8,
-        // Plenty of headroom for the JSON-returning prompts (Pulse, Team Report,
-        // What If, Spotlight reel, etc.).
-        maxOutputTokens: 2048,
-        // Both 2.5 models burn tokens on internal "thinking" by default.
-        // Zero it out so the full 2048 goes to our actual response.
-        thinkingConfig:  { thinkingBudget: 0 },
-      },
-    });
-
-    // One retry with backoff on 429 (rate limit) or 503 (transient).
-    // If the SHARP tier rate-limits, the retry falls back to the FAST tier so
-    // the user never sees a hard error from a per-model minute cap.
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const url = attempt === 1 && tier === 'sharp' ? urlFor('fast') : urlFor(tier);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
-        const finish = data.candidates?.[0]?.finishReason;
-        if (finish === 'MAX_TOKENS') throw new Error('Response truncated — try a smaller ask.');
-        if (finish === 'SAFETY')     throw new Error('Response blocked by safety filter.');
-        throw new Error('Empty response from Gemini.');
-      }
-
-      if ((res.status === 429 || res.status === 503) && attempt === 0) {
-        await new Promise(r => setTimeout(r, 1500));
-        continue;
-      }
-
-      let detail = '';
-      try {
-        const errBody = await res.json();
-        detail = errBody?.error?.message ? ` — ${errBody.error.message}` : '';
-      } catch { /* ignore */ }
-      throw new Error(`Gemini ${res.status}${detail}`);
+    const { ensureAuthSession } = await import('@services/firebaseAuth');
+    const hasSession = await ensureAuthSession();
+    if (!hasSession) {
+      throw new Error("Can't reach the AI right now — check your connection and try again.");
     }
-    throw new Error('Gemini retried and still failed.');
+
+    const { httpsCallable } = await import('firebase/functions');
+    const { functions } = await import('@lib/firebase');
+    const fn = httpsCallable<
+      { systemPrompt: string; prompt: string; tier: Tier; maxTokens: number },
+      { text: string }
+    >(functions, 'aiProxy');
+
+    try {
+      const res = await fn({
+        systemPrompt: SYSTEM_PROMPT,
+        prompt: fullPrompt,
+        tier,
+        maxTokens: 2048,
+      });
+      const text = res.data?.text;
+      if (!text) throw new Error('Empty response from the AI.');
+      return text;
+    } catch (e: any) {
+      const code = e?.code ?? '';
+      if (code === 'functions/unauthenticated') {
+        throw new Error('Session expired — pull to refresh and try again.');
+      }
+      if (code === 'functions/resource-exhausted') {
+        throw new Error('AI is at capacity right now. Give it a minute.');
+      }
+      if (code === 'functions/unavailable' || code === 'functions/deadline-exceeded') {
+        throw new Error("Can't reach the AI right now — check your connection and try again.");
+      }
+      throw new Error(e?.message ?? 'The AI hit a snag. Try again.');
+    }
   } finally {
     release();
   }

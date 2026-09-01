@@ -33,20 +33,22 @@ AI references back), Fantasy 101, Achievements, custom Alerts, Spotlight reel, P
 takes, shareable image cards, conversion onboarding, tap-to-explain glossary.
 Retention spine: daily streak + tiers, dynamic 10am push, personalization memory.
 
+## AI security model (done — worth reviewing)
+The app ships with **no Gemini key**. Every AI call goes through the deployed
+`aiProxy` callable, which holds the key as a Firebase secret. Because the proxy
+requires an auth context, the app opens an **anonymous Firebase session** for
+pre-signup screens, and `app/_layout.tsx` explicitly does *not* treat an
+anonymous session as signed-in for routing. Abuse controls in the proxy:
+per-uid daily caps (12 anonymous / 400 real, Firestore-backed transaction),
+a 24k-char prompt ceiling, and Firestore rules that deny all client access to
+the `aiUsage` counters and restrict owned documents to non-anonymous users.
+
 ## What's left before App Store submission (all accounts/hosting, not code)
-1. **Deploy the AI proxy** so the Gemini key is fully server-side:
-   ```
-   cd functions && npm install
-   firebase functions:secrets:set GEMINI_API_KEY
-   firebase deploy --only functions:aiProxy
-   ```
-   Then delete `EXPO_PUBLIC_GEMINI_API_KEY` from `.env` + CI secrets. (The client
-   already prefers the proxy and falls back only while the key is still present.)
-2. **Host the legal docs** (`/legal/privacy-policy.md`, `/legal/terms-of-service.md`)
+1. **Host the legal docs** (`/legal/privacy-policy.md`, `/legal/terms-of-service.md`)
    at public URLs and put the Privacy Policy URL in App Store Connect.
-3. **Apple Developer account** ($99/yr) → EAS/Xcode production build → TestFlight.
-4. **Sentry** crash reporting — add the SDK + DSN; the ErrorBoundary hook is ready.
-5. Optional: **Lineup Auto-Apply** (write to Yahoo) needs a Yahoo write-scope re-auth
+2. **Apple Developer account** ($99/yr) → EAS/Xcode production build → TestFlight.
+3. **Sentry** crash reporting — add the SDK + DSN; the ErrorBoundary hook is ready.
+4. Optional: **Lineup Auto-Apply** (write to Yahoo) needs a Yahoo write-scope re-auth
    — deliberately not built since the granted scope is read-only.
 
 ## Repo

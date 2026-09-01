@@ -1,6 +1,6 @@
 # DraftIQ — Terms of Service
 
-_Last updated: [DATE]_
+_Last updated: September 1, 2026_
 
 By using DraftIQ ("the app") you agree to these terms. If you don't agree, don't
 use the app.

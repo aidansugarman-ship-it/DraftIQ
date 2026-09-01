@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  signInAnonymously,
   updateProfile,
   GoogleAuthProvider,
   OAuthProvider,
@@ -60,6 +61,34 @@ const persistNewUser = async (
     createdAt: serverTimestamp(),
   }));
 };
+
+// ── Anonymous session ─────────────────────────────────────────────────────────
+
+/**
+ * Guarantees SOME Firebase auth session exists, signing in anonymously if the
+ * user hasn't made a real account yet.
+ *
+ * Why: the AI runs through the `aiProxy` Cloud Function, which requires an auth
+ * context so the Gemini key never ships in the app. The pre-signup "taste a
+ * take" screen still needs AI, so it needs a session — an anonymous one.
+ *
+ * Anonymous users are NOT treated as signed in for routing (see app/_layout).
+ * When they later sign up for real, Firebase issues a fresh uid; the anonymous
+ * one is disposable and holds no data.
+ */
+export const ensureAuthSession = async (): Promise<boolean> => {
+  if (auth.currentUser) return true;
+  try {
+    await signInAnonymously(auth);
+    return true;
+  } catch (e) {
+    console.warn('[auth] anonymous sign-in failed:', e);
+    return false;
+  }
+};
+
+/** True when there's a session but it's a throwaway anonymous one. */
+export const isAnonymousSession = (): boolean => !!auth.currentUser?.isAnonymous;
 
 // ── Email / Password ──────────────────────────────────────────────────────────
 

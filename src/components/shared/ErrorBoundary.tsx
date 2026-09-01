@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from '@components/ui/Text';
 import { colors } from '@constants/colors';
 import { spacing, radius } from '@constants/spacing';
+import { captureError } from '@services/errorReporting';
 
 interface Props {
   children: ReactNode;
@@ -29,12 +30,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: unknown) {
-    // Hook point for Sentry / crash reporting.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Sentry = require('@sentry/react-native');
-      Sentry?.captureException?.(error, { tags: { scope: this.props.scope ?? 'app' } });
-    } catch { /* Sentry not installed — no-op */ }
+    // No-ops when no Sentry DSN is configured.
+    captureError(error, { scope: this.props.scope ?? 'app' });
   }
 
   reset = () => this.setState({ hasError: false, message: '' });
