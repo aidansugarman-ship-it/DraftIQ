@@ -63,6 +63,20 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Verify JS bundle is embedded
+        run: |
+          # A Release .app with no main.jsbundle looks fine to xcodebuild but
+          # crashes instantly at runtime with "No bundle URL present". This has
+          # happened (a build-phase wrapper failed under `set +e`), so fail the
+          # build here rather than shipping an .app that cannot launch.
+          APP_PATH=$(find ios/build/Build/Products/Release-iphonesimulator -name "*.app" -maxdepth 1 | head -1)
+          if [ ! -f "$APP_PATH/main.jsbundle" ]; then
+            echo "::error::main.jsbundle missing from $APP_PATH — the app would crash on launch."
+            ls -la "$APP_PATH" || true
+            exit 1
+          fi
+          echo "main.jsbundle present ($(du -h "$APP_PATH/main.jsbundle" | cut -f1))"
+
       - name: Find and package built .app
         run: |
           APP_PATH=$(find ios/build/Build/Products/Release-iphonesimulator -name "*.app" -maxdepth 1 | head -1)

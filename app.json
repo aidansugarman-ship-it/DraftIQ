@@ -59,8 +59,7 @@
             "newArchEnabled": false
           }
         }
-      ],
-      "@sentry/react-native"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

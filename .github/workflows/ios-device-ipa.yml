@@ -74,6 +74,12 @@ jobs:
       - name: Package as IPA
         run: |
           APP_PATH=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" -maxdepth 1 | head -1)
+          # A Release .app with no main.jsbundle builds fine but crashes at
+          # launch with "No bundle URL present" — fail loudly instead.
+          if [ -n "$APP_PATH" ] && [ ! -f "$APP_PATH/main.jsbundle" ]; then
+            echo "::error::main.jsbundle missing from $APP_PATH — the app would crash on launch."
+            exit 1
+          fi
           if [ -z "$APP_PATH" ]; then
             echo "::error::No .app found in Release-iphoneos"; exit 1
           fi

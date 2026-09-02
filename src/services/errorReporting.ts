@@ -10,6 +10,18 @@ import * as Sentry from '@sentry/react-native';
  * The DSN is safe to ship in the client: it's a write-only ingest endpoint,
  * not a credential (this is Sentry's documented model). It is NOT like the
  * Gemini key — see src/services/gemini.ts.
+ *
+ * NOTE ON THE EXPO CONFIG PLUGIN:
+ * "@sentry/react-native" is deliberately NOT in app.json's plugins array.
+ * That plugin wraps the "Bundle React Native code and images" build phase in
+ * `sentry-cli react-native xcode` to upload source maps. Without a configured
+ * Sentry org/project/auth token it fails, and because the phase runs under
+ * `set +e` it fails *silently* — producing an .app with no main.jsbundle that
+ * crashes on launch with "No bundle URL present". CI still goes green.
+ *
+ * When you have a Sentry account: add the org/project/authToken config, add
+ * the plugin back to app.json, and verify the built .app actually contains
+ * main.jsbundle before shipping it.
  */
 
 const DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? '';
